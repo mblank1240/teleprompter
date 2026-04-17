@@ -280,6 +280,7 @@
 
     <span class="tag">size</span>
     <button class="btn" onclick="changeFontSize(-3)">A−</button>
+    <span class="speed-val" id="fontVal">28</span>
     <button class="btn" onclick="changeFontSize(3)">A+</button>
 
     <div class="divider"></div>
@@ -426,10 +427,6 @@ function toggleMirror(axis) {
   mirror[axis] = !mirror[axis];
   $('btnMirror' + axis.toUpperCase()).classList.toggle('on', mirror[axis]);
   applyMirror();
-  if (axis === 'v') {
-    const max = getMaxScroll();
-    if (max > 0) setScrollPos(max - scrollY);
-  }
   broadcast({ type: 'mirror', mirror });
 }
 
@@ -437,6 +434,7 @@ function toggleMirror(axis) {
 function changeFontSize(d) {
   fontSize = Math.max(14, Math.min(72, fontSize + d));
   $('prompterText').style.fontSize = fontSize + 'px';
+  $('fontVal').textContent = fontSize;
   broadcast({ type: 'fontSize', fontSize });
 }
 
@@ -463,21 +461,14 @@ function setScrollPos(y) {
   $('prompterScroll').style.transform = 'translateY(' + (-scrollY) + 'px)';
   const max = getMaxScroll();
   const ratio = max > 0 ? scrollY / max : 0;
-  const pct = mirror.v ? (1 - ratio) : ratio;
-  $('progressFill').style.width = (Math.min(1, pct) * 100).toFixed(1) + '%';
+  $('progressFill').style.width = (ratio * 100).toFixed(1) + '%';
 }
 
 function animate() {
   if (!playing) return;
-  const delta = speed * 0.04;
-  if (mirror.v) {
-    scrollY -= delta;
-    if (scrollY <= 0) { scrollY = 0; setScrollPos(0); stopPlay(); return; }
-  } else {
-    scrollY += delta;
-    const max = getMaxScroll();
-    if (scrollY >= max) { scrollY = max; setScrollPos(scrollY); stopPlay(); return; }
-  }
+  scrollY += speed * 0.04;
+  const max = getMaxScroll();
+  if (scrollY >= max) { scrollY = max; setScrollPos(scrollY); stopPlay(); return; }
   setScrollPos(scrollY);
   raf = requestAnimationFrame(animate);
 }
@@ -513,15 +504,14 @@ function setPlayIcon(isPlaying) {
 
 function resetScroll() {
   stopPlay();
-  setScrollPos(mirror.v ? getMaxScroll() : 0);
+  setScrollPos(0);
   broadcast({ type: 'reset' });
 }
 
 function seekTo(e) {
   const bar = $('progressBar');
   const ratio = e.offsetX / bar.clientWidth;
-  const max = getMaxScroll();
-  setScrollPos(mirror.v ? (1 - ratio) * max : ratio * max);
+  setScrollPos(ratio * getMaxScroll());
 }
 
 // ── Drag to scroll ──
@@ -544,7 +534,7 @@ prompterPanel.addEventListener('pointermove', e => {
   if (dragStartY === null) return;
   const dy = dragStartY - e.clientY;
   if (Math.abs(dy) > 5) wasDrag = true;
-  setScrollPos(dragScrollOrigin + (mirror.v ? -dy : dy));
+  setScrollPos(dragScrollOrigin + dy);
 });
 
 prompterPanel.addEventListener('pointerup', () => {
