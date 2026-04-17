@@ -285,10 +285,13 @@ let peer = null;
 let conn = null;
 let remoteState = { playing: false, speed: 3, fontSize: 28, mirror: { h: false, v: false } };
 
-// Pre-fill code from URL hash
+// Pre-fill code from URL hash and auto-connect if present
 window.addEventListener('load', () => {
   const hash = window.location.hash.replace('#', '');
-  if (hash.length === 6) $('codeInput').value = hash.toUpperCase();
+  if (hash.length === 6) {
+    $('codeInput').value = hash.toUpperCase();
+    setTimeout(doConnect, 300);
+  }
 });
 
 $('codeInput').addEventListener('input', e => {
@@ -347,6 +350,7 @@ function setupConn() {
     } else if (msg.type === 'play') { remoteState.playing = true; updatePlayUI(); }
     else if (msg.type === 'pause') { remoteState.playing = false; updatePlayUI(); }
     else if (msg.type === 'speed') { remoteState.speed = msg.speed; $('remoteSpeed').textContent = msg.speed; }
+    else if (msg.type === 'fontSize') { remoteState.fontSize = msg.fontSize; $('remoteFontSize').textContent = msg.fontSize; }
     else if (msg.type === 'mirror') { remoteState.mirror = msg.mirror; updateMirrorUI(); }
     else if (msg.type === 'reset') { remoteState.playing = false; updatePlayUI(); }
   });
