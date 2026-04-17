@@ -313,26 +313,33 @@ function doConnect() {
   if (code.length < 6) { setStatus('Code must be 6 characters', 'err'); return; }
 
   $('connectBtn').disabled = true;
-  setStatus('Connecting…');
+  setStatus('Reaching signaling server…');
 
   peer = new Peer({ debug: 0 });
 
+  const signalingTimeout = setTimeout(() => {
+    setStatus('Cannot reach PeerJS server — check internet connection', 'err');
+    $('connectBtn').disabled = false;
+  }, 8000);
+
   peer.on('open', myId => {
-    // The host peer ID starts with the session code (first 6 chars)
-    // We need to find the full peer ID — the host stores it, or we try common suffix
-    // Strategy: connect using code as prefix, host peer ID = code_lowercase + random suffix stored in qr url
-    // Actually we encoded full URL in QR. For manual code entry, we connect to peer ID = code (lowercase)
-    // The host sets peer ID to a random string whose first 6 chars == code when uppercased
-    // PeerJS random IDs look like "xxxxxxxx-xxxx-..." — we can't guarantee prefix
-    // Solution: host peer ID IS the code (6 char) for simplicity
-    // We'll use a fixed ID format: "prompter-" + code (lowercase)
+    clearTimeout(signalingTimeout);
+    setStatus('Signaling OK — connecting to prompter…');
     const hostId = 'prompter-' + code.toLowerCase();
     conn = peer.connect(hostId, { reliable: true });
     setupConn();
   });
 
   peer.on('error', err => {
-    setStatus('Connection failed: ' + err.type, 'err');
+    clearTimeout(signalingTimeout);
+    const msg = {
+      'peer-unavailable': 'Prompter not found — is the Remote panel open on the iPad?',
+      'network': 'Network error — check your connection',
+      'server-error': 'PeerJS server error — try again',
+      'socket-error': 'WebSocket blocked — network may restrict this app',
+      'socket-closed': 'Connection to server lost — try again',
+    }[err.type] || ('Error: ' + err.type);
+    setStatus(msg, 'err');
     $('connectBtn').disabled = false;
   });
 }
