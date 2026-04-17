@@ -1,0 +1,8 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(node -e \"const os=require\\('os'\\); for\\(const [n,ifaces] of Object.entries\\(os.networkInterfaces\\(\\)\\)\\){for\\(const i of ifaces\\){if\\(i.family==='IPv4'&&!i.internal\\)console.log\\(n,i.address\\)}}\")",
+      "Bash(node server.js)"
+    ]
+  }
+}

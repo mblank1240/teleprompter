@@ -1,0 +1,1 @@
+  peer = new Peer('prompter-' + code.toLowerCase(), { debug: 0 });

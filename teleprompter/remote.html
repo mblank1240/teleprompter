@@ -1,0 +1,442 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black">
+  <meta name="apple-mobile-web-app-title" content="Prompter Remote">
+  <meta name="theme-color" content="#0a0a0a">
+  <title>Prompter Remote</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Playfair+Display:wght@700&display=swap" rel="stylesheet">
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg: #0a0a0a;
+      --bg2: #111;
+      --bg3: #0d0d0d;
+      --border: #222;
+      --border2: #333;
+      --border3: #444;
+      --text: #f0ead8;
+      --text2: #aaa;
+      --text3: #666;
+      --accent: #e8e0c8;
+      --green: #5cb85c;
+      --red: #e74c3c;
+    }
+
+    html, body {
+      height: 100%; background: var(--bg);
+      color: var(--text); font-family: 'DM Mono', monospace;
+      overflow: hidden; -webkit-tap-highlight-color: transparent;
+    }
+
+    .screen { display: flex; flex-direction: column; height: 100vh; height: 100dvh; }
+
+    /* ── Connect screen ── */
+    .connect-screen {
+      flex: 1; display: flex; flex-direction: column;
+      align-items: center; justify-content: center;
+      gap: 24px; padding: 32px;
+    }
+
+    .logo { font-family: 'Playfair Display', serif; font-size: 24px; font-weight: 700; color: var(--accent); }
+    .sub { font-size: 12px; color: var(--text3); text-transform: uppercase; letter-spacing: 2px; margin-top: -16px; }
+
+    .code-input-wrap {
+      display: flex; flex-direction: column; gap: 10px;
+      width: 100%; max-width: 300px;
+    }
+    .code-label { font-size: 11px; color: var(--text3); text-transform: uppercase; letter-spacing: 1.5px; }
+    .code-input {
+      background: var(--bg2); border: 0.5px solid var(--border2);
+      color: var(--accent); font-family: 'DM Mono', monospace;
+      font-size: 28px; font-weight: 500; letter-spacing: 8px;
+      padding: 14px 16px; border-radius: 8px; outline: none;
+      text-transform: uppercase; text-align: center; width: 100%;
+    }
+    .code-input:focus { border-color: var(--accent); }
+
+    .connect-btn {
+      width: 100%; max-width: 300px;
+      background: var(--accent); color: #0a0a0a;
+      border: none; border-radius: 8px;
+      font-family: 'DM Mono', monospace; font-size: 14px; font-weight: 500;
+      padding: 14px; cursor: pointer; transition: all 0.15s;
+    }
+    .connect-btn:hover { background: #fff; }
+    .connect-btn:disabled { background: var(--border2); color: var(--text3); cursor: default; }
+
+    .status-msg { font-size: 12px; color: var(--text3); text-align: center; min-height: 16px; }
+    .status-msg.err { color: var(--red); }
+    .status-msg.ok { color: var(--green); }
+
+    /* ── Controller screen ── */
+    .controller-screen {
+      flex: 1; display: none; flex-direction: column;
+      overflow: hidden;
+    }
+
+    .ctrl-header {
+      display: flex; align-items: center; gap: 10px;
+      padding: 12px 16px;
+      background: var(--bg2); border-bottom: 0.5px solid var(--border);
+    }
+    .ctrl-title { font-family: 'Playfair Display', serif; font-size: 15px; color: var(--accent); }
+    .conn-badge {
+      margin-left: auto; display: flex; align-items: center; gap: 6px;
+      font-size: 11px; color: var(--green);
+    }
+    .badge-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--green); }
+    .disconnect-btn {
+      background: transparent; border: 0.5px solid var(--border2);
+      color: var(--text3); font-family: 'DM Mono', monospace;
+      font-size: 11px; padding: 4px 8px; border-radius: 4px; cursor: pointer;
+    }
+
+    .ctrl-body { flex: 1; display: flex; flex-direction: column; gap: 0; overflow-y: auto; }
+
+    /* Big play button */
+    .play-zone {
+      display: flex; align-items: center; justify-content: center;
+      padding: 32px 24px;
+      border-bottom: 0.5px solid var(--border);
+    }
+    .big-play {
+      width: 100px; height: 100px; border-radius: 50%;
+      background: var(--accent); border: none; cursor: pointer;
+      display: flex; align-items: center; justify-content: center;
+      transition: all 0.15s; -webkit-tap-highlight-color: transparent;
+    }
+    .big-play:active { transform: scale(0.94); background: #fff; }
+    .big-play.paused { background: #1a3a1a; border: 2px solid var(--green); }
+    .big-play.paused svg { fill: var(--green); }
+    .big-play svg { width: 36px; height: 36px; fill: #0a0a0a; transition: fill 0.15s; }
+
+    .play-label { font-size: 12px; color: var(--text3); text-align: center; margin-top: 10px; }
+
+    /* Controls grid */
+    .ctrl-grid {
+      display: grid; grid-template-columns: 1fr 1fr;
+      gap: 0;
+    }
+
+    .ctrl-section {
+      padding: 16px;
+      border-bottom: 0.5px solid var(--border);
+      display: flex; flex-direction: column; gap: 10px;
+    }
+    .ctrl-section:nth-child(odd) { border-right: 0.5px solid var(--border); }
+
+    .ctrl-section-label { font-size: 10px; color: var(--text3); text-transform: uppercase; letter-spacing: 1.5px; }
+
+    .val-display { font-size: 28px; color: var(--accent); font-weight: 500; text-align: center; }
+
+    .btn-row { display: flex; gap: 8px; justify-content: center; }
+
+    .ctrl-btn {
+      flex: 1; background: var(--bg3);
+      border: 0.5px solid var(--border2);
+      color: var(--text2); font-family: 'DM Mono', monospace;
+      font-size: 18px; padding: 12px 8px; border-radius: 8px; cursor: pointer;
+      transition: all 0.1s; -webkit-tap-highlight-color: transparent;
+      text-align: center;
+    }
+    .ctrl-btn:active { background: #222; color: #fff; transform: scale(0.96); }
+
+    /* Mirror section */
+    .mirror-section {
+      padding: 16px; border-bottom: 0.5px solid var(--border);
+      display: flex; flex-direction: column; gap: 10px;
+    }
+    .mirror-row { display: flex; gap: 8px; }
+    .mirror-btn {
+      flex: 1; background: var(--bg3);
+      border: 0.5px solid var(--border2);
+      color: var(--text2); font-family: 'DM Mono', monospace;
+      font-size: 13px; padding: 12px 8px; border-radius: 8px; cursor: pointer;
+      transition: all 0.1s; text-align: center; -webkit-tap-highlight-color: transparent;
+    }
+    .mirror-btn.on { background: var(--accent); color: #0a0a0a; border-color: var(--accent); }
+    .mirror-btn:active { transform: scale(0.96); }
+
+    /* Reset */
+    .reset-section { padding: 16px; border-bottom: 0.5px solid var(--border); }
+    .reset-btn {
+      width: 100%; background: transparent;
+      border: 0.5px solid var(--border2); color: var(--text2);
+      font-family: 'DM Mono', monospace; font-size: 13px;
+      padding: 12px; border-radius: 8px; cursor: pointer;
+      transition: all 0.1s; -webkit-tap-highlight-color: transparent;
+    }
+    .reset-btn:active { background: #1a1a1a; color: #fff; }
+
+    /* Script editor */
+    .script-section {
+      padding: 16px; display: flex; flex-direction: column; gap: 8px;
+      flex: 1;
+    }
+    .script-textarea {
+      background: var(--bg3); border: 0.5px solid var(--border2);
+      color: var(--text2); font-family: 'DM Mono', monospace;
+      font-size: 12px; line-height: 1.65; padding: 10px;
+      border-radius: 8px; outline: none; resize: none;
+      min-height: 100px; width: 100%;
+    }
+    .send-script-btn {
+      background: var(--bg2); border: 0.5px solid var(--border3);
+      color: var(--text2); font-family: 'DM Mono', monospace;
+      font-size: 12px; padding: 10px; border-radius: 8px; cursor: pointer;
+      transition: all 0.1s;
+    }
+    .send-script-btn:active { background: #222; color: #fff; }
+  </style>
+</head>
+<body>
+<div class="screen">
+
+  <!-- ── Connect screen ── -->
+  <div class="connect-screen" id="connectScreen">
+    <div class="logo">Prompter</div>
+    <div class="sub">Remote Control</div>
+
+    <div class="code-input-wrap">
+      <div class="code-label">Session Code</div>
+      <input class="code-input" id="codeInput" maxlength="6" placeholder="ABC123" autocomplete="off" autocorrect="off" spellcheck="false">
+    </div>
+
+    <button class="connect-btn" id="connectBtn" onclick="doConnect()">Connect</button>
+
+    <div class="status-msg" id="statusMsg">Enter the 6-character code shown on the prompter</div>
+  </div>
+
+  <!-- ── Controller screen ── -->
+  <div class="controller-screen" id="controllerScreen">
+    <div class="ctrl-header">
+      <div class="ctrl-title">Prompter Remote</div>
+      <div class="conn-badge"><div class="badge-dot"></div> Connected</div>
+      <button class="disconnect-btn" onclick="doDisconnect()">✕</button>
+    </div>
+
+    <div class="ctrl-body">
+
+      <!-- Play -->
+      <div class="play-zone" style="flex-direction:column">
+        <button class="big-play" id="bigPlay" onclick="sendPlay()">
+          <svg id="remotePlayIcon" viewBox="0 0 16 16"><polygon points="3,1 14,8 3,15"/></svg>
+        </button>
+        <div class="play-label" id="playLabel">Tap to play</div>
+      </div>
+
+      <!-- Speed + Font size -->
+      <div class="ctrl-grid">
+        <div class="ctrl-section">
+          <div class="ctrl-section-label">Speed</div>
+          <div class="val-display" id="remoteSpeed">3</div>
+          <div class="btn-row">
+            <button class="ctrl-btn" onclick="adjSpeed(-1)">−</button>
+            <button class="ctrl-btn" onclick="adjSpeed(1)">+</button>
+          </div>
+        </div>
+        <div class="ctrl-section">
+          <div class="ctrl-section-label">Font size</div>
+          <div class="val-display" id="remoteFontSize">28</div>
+          <div class="btn-row">
+            <button class="ctrl-btn" onclick="adjFont(-3)">A−</button>
+            <button class="ctrl-btn" onclick="adjFont(3)">A+</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Mirror -->
+      <div class="mirror-section">
+        <div class="ctrl-section-label">Mirror</div>
+        <div class="mirror-row">
+          <button class="mirror-btn" id="rMirrorH" onclick="toggleMirror('h')">↔ Horizontal</button>
+          <button class="mirror-btn" id="rMirrorV" onclick="toggleMirror('v')">↕ Vertical</button>
+        </div>
+      </div>
+
+      <!-- Reset -->
+      <div class="reset-section">
+        <button class="reset-btn" onclick="sendCmd({type:'reset'})">↺ Reset to beginning</button>
+      </div>
+
+      <!-- Script -->
+      <div class="script-section">
+        <div class="ctrl-section-label">Send new script</div>
+        <textarea class="script-textarea" id="remoteScript" placeholder="Type or paste script here, then tap Send…" rows="5"></textarea>
+        <button class="send-script-btn" onclick="sendScript()">Send script to prompter →</button>
+      </div>
+
+    </div>
+  </div>
+
+</div>
+
+<script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
+<script>
+const $ = id => document.getElementById(id);
+
+let peer = null;
+let conn = null;
+let remoteState = { playing: false, speed: 3, fontSize: 28, mirror: { h: false, v: false } };
+
+// Pre-fill code from URL hash and auto-connect if present
+window.addEventListener('load', () => {
+  const hash = window.location.hash.replace('#', '');
+  if (hash.length === 6) {
+    $('codeInput').value = hash.toUpperCase();
+    setTimeout(doConnect, 300);
+  }
+});
+
+$('codeInput').addEventListener('input', e => {
+  e.target.value = e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, '');
+});
+
+$('codeInput').addEventListener('keydown', e => {
+  if (e.key === 'Enter') doConnect();
+});
+
+function setStatus(msg, cls) {
+  const el = $('statusMsg');
+  el.textContent = msg;
+  el.className = 'status-msg' + (cls ? ' ' + cls : '');
+}
+
+function doConnect() {
+  const code = $('codeInput').value.trim().toUpperCase();
+  if (code.length < 6) { setStatus('Code must be 6 characters', 'err'); return; }
+
+  $('connectBtn').disabled = true;
+  setStatus('Connecting…');
+
+  peer = new Peer({ debug: 0 });
+
+  peer.on('open', myId => {
+    // The host peer ID starts with the session code (first 6 chars)
+    // We need to find the full peer ID — the host stores it, or we try common suffix
+    // Strategy: connect using code as prefix, host peer ID = code_lowercase + random suffix stored in qr url
+    // Actually we encoded full URL in QR. For manual code entry, we connect to peer ID = code (lowercase)
+    // The host sets peer ID to a random string whose first 6 chars == code when uppercased
+    // PeerJS random IDs look like "xxxxxxxx-xxxx-..." — we can't guarantee prefix
+    // Solution: host peer ID IS the code (6 char) for simplicity
+    // We'll use a fixed ID format: "prompter-" + code (lowercase)
+    const hostId = 'prompter-' + code.toLowerCase();
+    conn = peer.connect(hostId, { reliable: true });
+    setupConn();
+  });
+
+  peer.on('error', err => {
+    setStatus('Connection failed: ' + err.type, 'err');
+    $('connectBtn').disabled = false;
+  });
+}
+
+function setupConn() {
+  conn.on('open', () => {
+    setStatus('Connected!', 'ok');
+    setTimeout(showController, 500);
+  });
+
+  conn.on('data', msg => {
+    if (msg.type === 'state') {
+      remoteState = { playing: msg.playing, speed: msg.speed, fontSize: msg.fontSize, mirror: msg.mirror };
+      updateUI();
+    } else if (msg.type === 'play') { remoteState.playing = true; updatePlayUI(); }
+    else if (msg.type === 'pause') { remoteState.playing = false; updatePlayUI(); }
+    else if (msg.type === 'speed') { remoteState.speed = msg.speed; $('remoteSpeed').textContent = msg.speed; }
+    else if (msg.type === 'fontSize') { remoteState.fontSize = msg.fontSize; $('remoteFontSize').textContent = msg.fontSize; }
+    else if (msg.type === 'mirror') { remoteState.mirror = msg.mirror; updateMirrorUI(); }
+    else if (msg.type === 'reset') { remoteState.playing = false; updatePlayUI(); }
+  });
+
+  conn.on('close', () => { setStatus('Disconnected', 'err'); showConnect(); });
+  conn.on('error', () => { setStatus('Connection error', 'err'); });
+}
+
+function sendCmd(msg) {
+  if (conn && conn.open) conn.send(msg);
+}
+
+function showController() {
+  $('connectScreen').style.display = 'none';
+  $('controllerScreen').style.display = 'flex';
+}
+
+function showConnect() {
+  $('controllerScreen').style.display = 'none';
+  $('connectScreen').style.display = 'flex';
+  $('connectBtn').disabled = false;
+}
+
+function doDisconnect() {
+  if (conn) conn.close();
+  if (peer) peer.destroy();
+  peer = null; conn = null;
+  showConnect();
+}
+
+function sendPlay() {
+  if (remoteState.playing) {
+    remoteState.playing = false;
+    sendCmd({ type: 'pause' });
+  } else {
+    remoteState.playing = true;
+    sendCmd({ type: 'play' });
+  }
+  updatePlayUI();
+}
+
+function updatePlayUI() {
+  const playing = remoteState.playing;
+  $('bigPlay').className = 'big-play' + (playing ? '' : ' paused');
+  $('remotePlayIcon').innerHTML = playing
+    ? '<rect x="2" y="1" width="4" height="14"/><rect x="10" y="1" width="4" height="14"/>'
+    : '<polygon points="3,1 14,8 3,15"/>';
+  $('playLabel').textContent = playing ? 'Tap to pause' : 'Tap to play';
+}
+
+function adjSpeed(d) {
+  remoteState.speed = Math.max(1, Math.min(10, remoteState.speed + d));
+  $('remoteSpeed').textContent = remoteState.speed;
+  sendCmd({ type: 'speed', speed: remoteState.speed });
+}
+
+function adjFont(d) {
+  remoteState.fontSize = Math.max(14, Math.min(72, remoteState.fontSize + d));
+  $('remoteFontSize').textContent = remoteState.fontSize;
+  sendCmd({ type: 'fontSize', fontSize: remoteState.fontSize });
+}
+
+function toggleMirror(axis) {
+  remoteState.mirror[axis] = !remoteState.mirror[axis];
+  sendCmd({ type: 'mirror', mirror: remoteState.mirror });
+  updateMirrorUI();
+}
+
+function updateMirrorUI() {
+  $('rMirrorH').className = 'mirror-btn' + (remoteState.mirror.h ? ' on' : '');
+  $('rMirrorV').className = 'mirror-btn' + (remoteState.mirror.v ? ' on' : '');
+}
+
+function updateUI() {
+  $('remoteSpeed').textContent = remoteState.speed;
+  $('remoteFontSize').textContent = remoteState.fontSize;
+  updatePlayUI();
+  updateMirrorUI();
+}
+
+function sendScript() {
+  const text = $('remoteScript').value.trim();
+  if (!text) return;
+  sendCmd({ type: 'script', text });
+  $('remoteScript').value = '';
+}
+</script>
+</body>
+</html>

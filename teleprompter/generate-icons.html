@@ -1,0 +1,135 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Prompter — Icon Generator</title>
+<style>
+  body { background: #111; color: #aaa; font-family: 'DM Mono', monospace, monospace;
+         padding: 40px; text-align: center; }
+  h1 { color: #e8e0c8; font-size: 18px; font-weight: 400; letter-spacing: 2px;
+       text-transform: uppercase; margin-bottom: 8px; }
+  p  { font-size: 12px; color: #555; margin-bottom: 32px; }
+  .canvases { display: flex; gap: 32px; justify-content: center; align-items: flex-end;
+              margin-bottom: 32px; }
+  .icon-wrap { display: flex; flex-direction: column; align-items: center; gap: 8px; }
+  .icon-wrap span { font-size: 11px; color: #555; }
+  canvas { display: block; border-radius: 4px; }
+  .btns { display: flex; gap: 12px; justify-content: center; }
+  button { background: #e8e0c8; color: #0a0a0a; border: none; padding: 10px 24px;
+           font-size: 13px; cursor: pointer; border-radius: 6px; letter-spacing: 0.5px; }
+  button:hover { background: #fff; }
+  .note { margin-top: 28px; font-size: 11px; color: #444; line-height: 1.8; }
+  code { background: #1a1a1a; padding: 1px 5px; border-radius: 3px; color: #888; }
+</style>
+</head>
+<body>
+<h1>Prompter Icon Generator</h1>
+<p>Open this in a browser, then download both icons into your <code>icons/</code> folder.</p>
+
+<div class="canvases">
+  <div class="icon-wrap">
+    <canvas id="c512" width="512" height="512"></canvas>
+    <span>512 × 512</span>
+  </div>
+  <div class="icon-wrap">
+    <canvas id="c192" width="192" height="192"></canvas>
+    <span>192 × 192</span>
+  </div>
+</div>
+
+<div class="btns">
+  <button onclick="dl(512)">↓ icon-512.png</button>
+  <button onclick="dl(192)">↓ icon-192.png</button>
+</div>
+
+<div class="note">
+  Save both files to <code>teleprompter/icons/</code>, replacing the existing ones.
+</div>
+
+<script>
+function roundRect(ctx, x, y, w, h, r) {
+  ctx.beginPath();
+  ctx.moveTo(x + r, y);
+  ctx.lineTo(x + w - r, y);
+  ctx.quadraticCurveTo(x + w, y, x + w, y + r);
+  ctx.lineTo(x + w, y + h - r);
+  ctx.quadraticCurveTo(x + w, y + h, x + w - r, y + h);
+  ctx.lineTo(x + r, y + h);
+  ctx.quadraticCurveTo(x, y + h, x, y + h - r);
+  ctx.lineTo(x, y + r);
+  ctx.quadraticCurveTo(x, y, x + r, y);
+  ctx.closePath();
+}
+
+function drawIcon(canvas) {
+  const ctx = canvas.getContext('2d');
+  const s = canvas.width;
+  const R = s * 0.22;
+
+  // ── Background ──────────────────────────────────────────
+  roundRect(ctx, 0, 0, s, s, R);
+  ctx.fillStyle = '#0a0a0a';
+  ctx.fill();
+
+  // Subtle top-to-bottom gradient to add depth
+  const grad = ctx.createLinearGradient(0, 0, 0, s);
+  grad.addColorStop(0, 'rgba(255,255,255,0.055)');
+  grad.addColorStop(0.6, 'rgba(0,0,0,0)');
+  grad.addColorStop(1, 'rgba(0,0,0,0.18)');
+  roundRect(ctx, 0, 0, s, s, R);
+  ctx.fillStyle = grad;
+  ctx.fill();
+
+  // ── Thin accent border ────────────────────────────────────
+  const bp = s * 0.034;
+  roundRect(ctx, bp, bp, s - bp * 2, s - bp * 2, R - bp);
+  ctx.strokeStyle = 'rgba(232,224,200,0.17)';
+  ctx.lineWidth = s * 0.0065;
+  ctx.stroke();
+
+  // ── "P" monogram ─────────────────────────────────────────
+  ctx.font = `700 ${Math.round(s * 0.54)}px Georgia, "Times New Roman", serif`;
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'alphabetic';
+  ctx.fillStyle = '#e8e0c8';
+  // Slight shadow for depth
+  ctx.shadowColor = 'rgba(0,0,0,0.5)';
+  ctx.shadowBlur = s * 0.04;
+  ctx.shadowOffsetY = s * 0.015;
+  ctx.fillText('P', s * 0.505, s * 0.585);
+  ctx.shadowColor = 'transparent';
+  ctx.shadowBlur = 0;
+  ctx.shadowOffsetY = 0;
+
+  // ── Scroll lines (three text-line motif) ─────────────────
+  const lineH = s * 0.027;
+  const lineY0 = s * 0.72;
+  const lineSpacing = s * 0.062;
+  const widths = [0.36, 0.28, 0.20];
+
+  for (let i = 0; i < 3; i++) {
+    const lw = s * widths[i];
+    const lx = s * 0.5 - lw / 2;
+    const ly = lineY0 + i * lineSpacing;
+    const alpha = 0.30 - i * 0.06;
+    roundRect(ctx, lx, ly, lw, lineH, lineH / 2);
+    ctx.fillStyle = `rgba(232,224,200,${alpha})`;
+    ctx.fill();
+  }
+}
+
+const c512 = document.getElementById('c512');
+const c192 = document.getElementById('c192');
+drawIcon(c512);
+drawIcon(c192);
+
+function dl(size) {
+  const canvas = size === 512 ? c512 : c192;
+  const a = document.createElement('a');
+  a.download = `icon-${size}.png`;
+  a.href = canvas.toDataURL('image/png');
+  a.click();
+}
+</script>
+</body>
+</html>

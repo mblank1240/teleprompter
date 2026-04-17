@@ -1,0 +1,664 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black">
+  <meta name="apple-mobile-web-app-title" content="Prompter">
+  <meta name="theme-color" content="#0a0a0a">
+  <link rel="manifest" href="manifest.json">
+  <link rel="apple-touch-icon" href="icons/icon-192.png">
+  <title>Prompter</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Playfair+Display:wght@700&display=swap" rel="stylesheet">
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg: #0a0a0a;
+      --bg2: #111;
+      --bg3: #0d0d0d;
+      --border: #222;
+      --border2: #333;
+      --border3: #444;
+      --text: #f0ead8;
+      --text2: #aaa;
+      --text3: #666;
+      --accent: #e8e0c8;
+      --green: #5cb85c;
+      --red: #c0392b;
+      --panel-w: 340px;
+    }
+
+    html, body {
+      height: 100%;
+      background: var(--bg);
+      color: var(--text);
+      font-family: 'DM Mono', monospace;
+      overflow: hidden;
+      -webkit-tap-highlight-color: transparent;
+    }
+
+    /* ── Layout ── */
+    .app { display: flex; flex-direction: column; height: 100vh; height: 100dvh; }
+
+    .toolbar {
+      display: flex; align-items: center; gap: 8px;
+      padding: 10px 14px;
+      background: var(--bg2);
+      border-bottom: 0.5px solid var(--border);
+      flex-shrink: 0;
+      flex-wrap: wrap;
+    }
+
+    .app-title {
+      font-family: 'Playfair Display', serif;
+      font-size: 16px; font-weight: 700;
+      color: var(--accent);
+      letter-spacing: 0.3px;
+      margin-right: 4px;
+    }
+
+    .divider { width: 0.5px; height: 20px; background: var(--border2); margin: 0 2px; flex-shrink: 0; }
+
+    .btn {
+      background: transparent;
+      border: 0.5px solid var(--border3);
+      color: var(--text2);
+      padding: 5px 10px;
+      border-radius: 6px;
+      font-family: 'DM Mono', monospace;
+      font-size: 12px;
+      cursor: pointer;
+      transition: all 0.15s;
+      white-space: nowrap;
+      -webkit-tap-highlight-color: transparent;
+    }
+    .btn:hover, .btn:active { background: #222; color: #fff; border-color: #666; }
+    .btn.on { background: var(--accent); color: #0a0a0a; border-color: var(--accent); font-weight: 500; }
+
+    .speed-group { display: flex; align-items: center; gap: 6px; }
+    .speed-label { font-size: 11px; color: var(--text3); }
+    .speed-val { font-size: 13px; font-weight: 500; color: var(--accent); min-width: 18px; text-align: right; }
+    input[type=range] { width: 80px; accent-color: var(--accent); }
+
+    .tag { font-size: 10px; color: var(--text3); padding: 2px 6px; border: 0.5px solid var(--border2); border-radius: 4px; }
+
+    /* ── Main area ── */
+    .main { display: flex; flex: 1; overflow: hidden; }
+
+    /* ── Editor panel ── */
+    .editor-panel {
+      width: var(--panel-w);
+      border-right: 0.5px solid var(--border);
+      display: flex; flex-direction: column;
+      flex-shrink: 0;
+    }
+    .panel-header {
+      font-size: 10px; text-transform: uppercase; letter-spacing: 1.5px;
+      color: var(--text3); padding: 8px 14px;
+      border-bottom: 0.5px solid #1a1a1a;
+    }
+    textarea {
+      flex: 1; background: var(--bg3); border: none; outline: none;
+      color: var(--text2); font-family: 'DM Mono', monospace;
+      font-size: 13px; line-height: 1.75; padding: 14px; resize: none;
+    }
+    textarea::placeholder { color: #2a2a2a; }
+
+    /* ── Prompter panel ── */
+    .prompter-panel { flex: 1; position: relative; overflow: hidden; background: #050505; }
+
+    .prompter-scroll {
+      position: absolute; top: 0; left: 0; right: 0;
+      padding: 40px 48px 80px;
+      will-change: transform;
+    }
+
+    .prompter-text {
+      font-family: 'Playfair Display', serif;
+      font-weight: 700;
+      line-height: 1.55;
+      color: var(--text);
+      word-break: break-word;
+      white-space: pre-wrap;
+      transition: font-size 0.1s;
+    }
+
+    .fade-top {
+      position: absolute; top: 0; left: 0; right: 0; height: 80px;
+      background: linear-gradient(to bottom, #050505 0%, transparent 100%);
+      pointer-events: none; z-index: 2;
+    }
+    .fade-bottom {
+      position: absolute; bottom: 0; left: 0; right: 0; height: 80px;
+      background: linear-gradient(to top, #050505 0%, transparent 100%);
+      pointer-events: none; z-index: 2;
+    }
+    .guide-line {
+      position: absolute; left: 0; right: 0; top: 38%;
+      height: 0.5px; background: rgba(232,224,200,0.1);
+      pointer-events: none; z-index: 3;
+    }
+
+    /* ── Play bar ── */
+    .playbar {
+      display: flex; align-items: center; gap: 10px;
+      padding: 10px 14px;
+      background: var(--bg3);
+      border-top: 0.5px solid var(--border);
+      flex-shrink: 0;
+    }
+
+    .status-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--border2); transition: background 0.3s; }
+    .status-dot.live { background: var(--green); }
+
+    .play-btn {
+      width: 38px; height: 38px; border-radius: 50%;
+      background: var(--accent); border: none; cursor: pointer;
+      display: flex; align-items: center; justify-content: center;
+      transition: all 0.15s; flex-shrink: 0;
+    }
+    .play-btn:hover { background: #fff; transform: scale(1.05); }
+    .play-btn svg { width: 14px; height: 14px; fill: #0a0a0a; }
+
+    .progress-wrap { flex: 1; position: relative; }
+    .progress-bar {
+      height: 3px; background: var(--border); border-radius: 2px;
+      cursor: pointer; position: relative;
+    }
+    .progress-fill { height: 100%; background: var(--accent); border-radius: 2px; width: 0%; transition: width 0.1s; }
+
+    .word-count { font-size: 11px; color: var(--text3); min-width: 52px; text-align: right; }
+
+    /* ── Remote panel (sidebar) ── */
+    .remote-panel {
+      width: var(--panel-w);
+      border-left: 0.5px solid var(--border);
+      display: flex; flex-direction: column;
+      background: var(--bg2);
+      flex-shrink: 0;
+      transition: width 0.25s ease;
+    }
+    .remote-panel.hidden { width: 0; overflow: hidden; border: none; }
+
+    .remote-inner { padding: 16px; display: flex; flex-direction: column; gap: 14px; min-width: var(--panel-w); }
+
+    .rp-title { font-size: 10px; text-transform: uppercase; letter-spacing: 1.5px; color: var(--text3); padding: 8px 14px; border-bottom: 0.5px solid #1a1a1a; }
+
+    .qr-box {
+      background: #fff; border-radius: 8px;
+      padding: 12px; display: flex;
+      align-items: center; justify-content: center;
+      aspect-ratio: 1;
+    }
+    #qrCanvas { width: 100%; height: 100%; display: flex; align-items: center; justify-content: center; }
+    #qrCanvas canvas, #qrCanvas img { width: 100% !important; height: 100% !important; }
+
+    .session-code {
+      text-align: center;
+      font-size: 22px; letter-spacing: 4px;
+      color: var(--accent); font-weight: 500;
+    }
+    .session-hint { text-align: center; font-size: 11px; color: var(--text3); line-height: 1.6; }
+
+    .peers-list { display: flex; flex-direction: column; gap: 6px; }
+    .peer-item {
+      display: flex; align-items: center; gap: 8px;
+      padding: 8px 10px; border-radius: 6px;
+      background: #0d0d0d; border: 0.5px solid var(--border);
+      font-size: 12px; color: var(--text2);
+    }
+    .peer-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--green); flex-shrink: 0; }
+    .no-peers { font-size: 12px; color: var(--text3); text-align: center; padding: 10px 0; }
+
+    .conn-status {
+      display: flex; align-items: center; gap: 6px;
+      font-size: 11px; color: var(--text3);
+      padding: 8px 10px; border-radius: 6px;
+      background: #0d0d0d; border: 0.5px solid var(--border);
+    }
+    .conn-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--border2); flex-shrink: 0; transition: background 0.3s; }
+    .conn-dot.ready { background: var(--accent); }
+    .conn-dot.connected { background: var(--green); }
+
+    /* ── iPad hidden editor (fullscreen prompter) ── */
+    @media (max-width: 768px) {
+      .editor-panel { display: none; }
+      .remote-panel { display: none; }
+      :root { --panel-w: 0px; }
+    }
+
+    /* ── Fullscreen mode ── */
+    .app.fullscreen .editor-panel,
+    .app.fullscreen .remote-panel { display: none; }
+    .app.fullscreen .toolbar { display: none; }
+    .app.fullscreen .playbar { display: none; }
+    .app.fullscreen .prompter-panel { flex: 1; }
+
+    /* Tap zones in fullscreen */
+    .tap-zone {
+      position: absolute; top: 0; left: 0; right: 0; bottom: 0; z-index: 10;
+      display: none;
+    }
+    .app.fullscreen .tap-zone { display: block; }
+    .tap-left { right: 50%; }
+    .tap-right { left: 50%; }
+
+    /* Fullscreen overlay controls */
+    .fs-controls {
+      position: absolute; bottom: 20px; left: 50%; transform: translateX(-50%);
+      display: none; align-items: center; gap: 12px; z-index: 20;
+      background: rgba(10,10,10,0.85); padding: 10px 18px; border-radius: 40px;
+      border: 0.5px solid #333; backdrop-filter: blur(8px);
+    }
+    .app.fullscreen .fs-controls { display: flex; }
+    .fs-btn {
+      background: transparent; border: none; color: var(--text2);
+      font-family: 'DM Mono', monospace; font-size: 13px; cursor: pointer;
+      padding: 4px 8px; border-radius: 4px;
+    }
+    .fs-btn:hover { color: #fff; }
+    .fs-play {
+      width: 34px; height: 34px; border-radius: 50%;
+      background: var(--accent); border: none; cursor: pointer;
+      display: flex; align-items: center; justify-content: center;
+    }
+    .fs-play svg { width: 12px; height: 12px; fill: #0a0a0a; }
+    .fs-speed { font-size: 12px; color: var(--text3); }
+  </style>
+</head>
+<body>
+<div class="app" id="app">
+
+  <!-- ── Toolbar ── -->
+  <div class="toolbar">
+    <span class="app-title">Prompter</span>
+    <div class="divider"></div>
+
+    <span class="tag">mirror</span>
+    <button class="btn" id="btnMirrorH" onclick="toggleMirror('h')">↔ H</button>
+    <button class="btn" id="btnMirrorV" onclick="toggleMirror('v')">↕ V</button>
+
+    <div class="divider"></div>
+
+    <span class="tag">size</span>
+    <button class="btn" onclick="changeFontSize(-3)">A−</button>
+    <button class="btn" onclick="changeFontSize(3)">A+</button>
+
+    <div class="divider"></div>
+
+    <div class="speed-group">
+      <span class="speed-label">speed</span>
+      <input type="range" min="1" max="10" value="3" step="1" id="speedSlider" oninput="updateSpeed(this.value)">
+      <span class="speed-val" id="speedVal">3</span>
+    </div>
+
+    <div class="divider"></div>
+
+    <button class="btn" id="btnRemote" onclick="toggleRemote()">⊕ Remote</button>
+    <button class="btn" id="btnFullscreen" onclick="enterFullscreen()">⤢ Full</button>
+  </div>
+
+  <!-- ── Main ── -->
+  <div class="main">
+
+    <!-- Editor -->
+    <div class="editor-panel">
+      <div class="panel-header">Script editor</div>
+      <textarea id="scriptInput" placeholder="Paste your script here..."></textarea>
+    </div>
+
+    <!-- Prompter -->
+    <div class="prompter-panel" id="prompterPanel">
+      <div class="fade-top"></div>
+      <div class="fade-bottom"></div>
+      <div class="guide-line"></div>
+      <div class="prompter-scroll" id="prompterScroll">
+        <div class="prompter-text" id="prompterText" style="font-size:28px"></div>
+      </div>
+      <!-- Tap zones (fullscreen only) -->
+      <div class="tap-zone tap-left" onclick="tapLeft()"></div>
+      <div class="tap-zone tap-right" onclick="tapRight()"></div>
+      <!-- Fullscreen controls -->
+      <div class="fs-controls">
+        <button class="fs-btn" onclick="changeFontSize(-3)">A−</button>
+        <button class="fs-btn" onclick="speedDown()">−</button>
+        <button class="fs-play" id="fsPlayBtn" onclick="togglePlay()">
+          <svg id="fsPlayIcon" viewBox="0 0 16 16"><polygon points="3,1 14,8 3,15"/></svg>
+        </button>
+        <button class="fs-btn" onclick="speedUp()">+</button>
+        <button class="fs-btn" onclick="changeFontSize(3)">A+</button>
+        <span class="fs-speed" id="fsSpeed">spd 3</span>
+        <button class="fs-btn" onclick="exitFullscreen()">✕</button>
+      </div>
+    </div>
+
+    <!-- Remote panel -->
+    <div class="remote-panel hidden" id="remotePanel">
+      <div class="rp-title">Remote Control</div>
+      <div class="remote-inner">
+        <div class="conn-status">
+          <div class="conn-dot" id="connDot"></div>
+          <span id="connLabel">Initializing…</span>
+        </div>
+        <div class="qr-box">
+          <div id="qrCanvas"></div>
+        </div>
+        <div class="session-code" id="sessionCode">------</div>
+        <div class="session-hint">Open <strong>remote.html</strong> on your phone and enter this code — or scan the QR code</div>
+        <div class="peers-list" id="peersList">
+          <div class="no-peers" id="noPeers">No controllers connected yet</div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- ── Play bar ── -->
+  <div class="playbar">
+    <div class="status-dot" id="statusDot"></div>
+    <button class="play-btn" id="playBtn" onclick="togglePlay()">
+      <svg id="playIcon" viewBox="0 0 16 16"><polygon points="3,1 14,8 3,15"/></svg>
+    </button>
+    <button class="btn" onclick="resetScroll()">↺</button>
+    <div class="progress-wrap">
+      <div class="progress-bar" id="progressBar" onclick="seekTo(event)">
+        <div class="progress-fill" id="progressFill"></div>
+      </div>
+    </div>
+    <span class="word-count" id="wordCount">0 words</span>
+  </div>
+
+</div>
+
+<!-- PeerJS + QRCode libs -->
+<script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+
+<script>
+// ── State ──
+let playing = false;
+let scrollY = 0;
+let raf = null;
+let fontSize = 28;
+let speed = 3;
+let mirror = { h: false, v: false };
+let peer = null;
+let connections = [];
+let remoteOpen = false;
+let fsMode = false;
+
+const $ = id => document.getElementById(id);
+
+// ── Text sync ──
+function syncText() {
+  const txt = $('scriptInput').value;
+  $('prompterText').textContent = txt;
+  applyMirror();
+  const w = txt.trim().split(/\s+/).filter(Boolean).length;
+  $('wordCount').textContent = w + ' word' + (w !== 1 ? 's' : '');
+}
+
+$('scriptInput').addEventListener('input', syncText);
+
+// Default script
+$('scriptInput').value = `Welcome to Prompter.
+
+Paste your script here and tap Play. Use the speed slider to control scroll pace, and A+ / A− to resize the text.
+
+Mirror H flips the text horizontally — useful for teleprompter glass setups.
+Mirror V flips vertically for below-the-lens mounts.
+
+Open the Remote panel to control this from your phone — no app needed.
+
+Tap the ⤢ Full button to go fullscreen. Tap left half to pause, right half to play.
+
+You're always one take away from your best performance.`;
+syncText();
+
+// ── Mirror ──
+function applyMirror() {
+  const el = $('prompterText');
+  el.className = 'prompter-text';
+  if (mirror.h && mirror.v) el.style.transform = 'scale(-1,-1)';
+  else if (mirror.h) el.style.transform = 'scaleX(-1)';
+  else if (mirror.v) el.style.transform = 'scaleY(-1)';
+  else el.style.transform = '';
+}
+
+function toggleMirror(axis) {
+  mirror[axis] = !mirror[axis];
+  $('btnMirror' + axis.toUpperCase()).classList.toggle('on', mirror[axis]);
+  applyMirror();
+  broadcast({ type: 'mirror', mirror });
+}
+
+// ── Font size ──
+function changeFontSize(d) {
+  fontSize = Math.max(14, Math.min(72, fontSize + d));
+  $('prompterText').style.fontSize = fontSize + 'px';
+  broadcast({ type: 'fontSize', fontSize });
+}
+
+// ── Speed ──
+function updateSpeed(v) {
+  speed = parseInt(v);
+  $('speedVal').textContent = v;
+  $('fsSpeed').textContent = 'spd ' + v;
+  if ($('speedSlider').value !== v) $('speedSlider').value = v;
+  broadcast({ type: 'speed', speed });
+}
+function speedUp() { updateSpeed(Math.min(10, speed + 1)); }
+function speedDown() { updateSpeed(Math.max(1, speed - 1)); }
+
+// ── Scroll ──
+function getMaxScroll() {
+  const panel = $('prompterPanel');
+  const scroll = $('prompterScroll');
+  return Math.max(0, scroll.scrollHeight - panel.clientHeight);
+}
+
+function setScrollPos(y) {
+  scrollY = Math.max(0, y);
+  $('prompterScroll').style.transform = 'translateY(' + (-scrollY) + 'px)';
+  const max = getMaxScroll();
+  $('progressFill').style.width = max > 0 ? Math.min(100, (scrollY / max) * 100).toFixed(1) + '%' : '0%';
+}
+
+function animate() {
+  if (!playing) return;
+  scrollY += speed * 0.45;
+  const max = getMaxScroll();
+  if (scrollY >= max) { scrollY = max; setScrollPos(scrollY); stopPlay(); return; }
+  setScrollPos(scrollY);
+  raf = requestAnimationFrame(animate);
+}
+
+// ── Play control ──
+function togglePlay() {
+  if (playing) stopPlay(); else startPlay();
+}
+
+function startPlay() {
+  playing = true;
+  $('statusDot').classList.add('live');
+  setPlayIcon(true);
+  raf = requestAnimationFrame(animate);
+  broadcast({ type: 'play' });
+}
+
+function stopPlay() {
+  playing = false;
+  $('statusDot').classList.remove('live');
+  setPlayIcon(false);
+  cancelAnimationFrame(raf);
+  broadcast({ type: 'pause' });
+}
+
+function setPlayIcon(isPlaying) {
+  const pause = '<rect x="2" y="1" width="4" height="14"/><rect x="10" y="1" width="4" height="14"/>';
+  const play = '<polygon points="3,1 14,8 3,15"/>';
+  const icon = isPlaying ? pause : play;
+  $('playIcon').innerHTML = icon;
+  $('fsPlayIcon').innerHTML = icon;
+}
+
+function resetScroll() {
+  stopPlay();
+  scrollY = 0;
+  setScrollPos(0);
+  broadcast({ type: 'reset' });
+}
+
+function seekTo(e) {
+  const bar = $('progressBar');
+  const ratio = e.offsetX / bar.clientWidth;
+  setScrollPos(ratio * getMaxScroll());
+}
+
+// ── Tap zones (fullscreen) ──
+function tapLeft() { stopPlay(); }
+function tapRight() { startPlay(); }
+
+// ── Fullscreen ──
+function enterFullscreen() {
+  fsMode = true;
+  $('app').classList.add('fullscreen');
+  $('btnFullscreen').classList.add('on');
+  const el = document.documentElement;
+  if (el.requestFullscreen) el.requestFullscreen();
+  else if (el.webkitRequestFullscreen) el.webkitRequestFullscreen();
+}
+
+function exitFullscreen() {
+  fsMode = false;
+  $('app').classList.remove('fullscreen');
+  $('btnFullscreen').classList.remove('on');
+  if (document.exitFullscreen) document.exitFullscreen();
+  else if (document.webkitExitFullscreen) document.webkitExitFullscreen();
+}
+
+document.addEventListener('keydown', e => {
+  if (e.code === 'Space') { e.preventDefault(); togglePlay(); }
+  if (e.code === 'ArrowUp') changeFontSize(2);
+  if (e.code === 'ArrowDown') changeFontSize(-2);
+  if (e.code === 'ArrowRight') speedUp();
+  if (e.code === 'ArrowLeft') speedDown();
+  if (e.code === 'Escape') exitFullscreen();
+});
+
+// ── Remote panel ──
+function toggleRemote() {
+  remoteOpen = !remoteOpen;
+  $('remotePanel').classList.toggle('hidden', !remoteOpen);
+  $('btnRemote').classList.toggle('on', remoteOpen);
+  if (remoteOpen && !peer) initPeer();
+}
+
+// ── PeerJS ──
+function initPeer() {
+  setConnStatus('dot', ''); setConnStatus('label', 'Connecting…');
+
+  // Generate a short random code and use it as the peer ID prefix
+  const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+  let code = '';
+  for (let i = 0; i < 6; i++) code += chars[Math.floor(Math.random() * chars.length)];
+  const peerId = 'prompter-' + code.toLowerCase();
+
+  peer = new Peer(peerId, { debug: 0 });
+
+  peer.on('open', () => {
+    $('sessionCode').textContent = code;
+    setConnStatus('dot', 'ready'); setConnStatus('label', 'Ready — share code or QR');
+    generateQR(code);
+  });
+
+  peer.on('connection', conn => {
+    conn.on('open', () => {
+      connections.push(conn);
+      addPeer(conn.peer);
+      // Send current state
+      conn.send({ type: 'state', playing, speed, fontSize, mirror });
+    });
+    conn.on('data', handleRemoteCommand);
+    conn.on('close', () => {
+      connections = connections.filter(c => c !== conn);
+      removePeer(conn.peer);
+    });
+  });
+
+  peer.on('error', err => {
+    setConnStatus('dot', ''); setConnStatus('label', 'Error: ' + err.type);
+  });
+}
+
+function handleRemoteCommand(cmd) {
+  if (cmd.type === 'play') startPlay();
+  else if (cmd.type === 'pause') stopPlay();
+  else if (cmd.type === 'reset') resetScroll();
+  else if (cmd.type === 'speed') updateSpeed(cmd.speed);
+  else if (cmd.type === 'fontSize') { fontSize = cmd.fontSize; $('prompterText').style.fontSize = fontSize + 'px'; }
+  else if (cmd.type === 'mirror') { mirror = cmd.mirror; applyMirror(); updateMirrorBtns(); }
+  else if (cmd.type === 'script') { $('scriptInput').value = cmd.text; syncText(); }
+  else if (cmd.type === 'seek') setScrollPos(cmd.ratio * getMaxScroll());
+}
+
+function broadcast(msg) {
+  connections.forEach(c => { try { c.send(msg); } catch(e) {} });
+}
+
+function setConnStatus(part, cls) {
+  if (part === 'dot') {
+    const d = $('connDot');
+    d.className = 'conn-dot';
+    if (cls) d.classList.add(cls);
+  } else {
+    $('connLabel').textContent = cls;
+  }
+}
+
+function addPeer(id) {
+  $('noPeers').style.display = 'none';
+  const div = document.createElement('div');
+  div.className = 'peer-item'; div.id = 'peer-' + id;
+  div.innerHTML = '<div class="peer-dot"></div><span>Controller connected</span>';
+  $('peersList').appendChild(div);
+  setConnStatus('dot', 'connected');
+  setConnStatus('label', 'Controller connected');
+}
+
+function removePeer(id) {
+  const el = document.getElementById('peer-' + id);
+  if (el) el.remove();
+  if (connections.length === 0) {
+    $('noPeers').style.display = 'block';
+    setConnStatus('dot', 'ready');
+    setConnStatus('label', 'Ready — share code or QR');
+  }
+}
+
+function updateMirrorBtns() {
+  $('btnMirrorH').classList.toggle('on', mirror.h);
+  $('btnMirrorV').classList.toggle('on', mirror.v);
+}
+
+// ── QR Code ──
+function generateQR(code) {
+  const container = $('qrCanvas');
+  container.innerHTML = '';
+  const base = window.location.href.replace(/\/index\.html.*$/, '').replace(/\/$/, '');
+  const url = base + '/remote.html#' + code;
+  try {
+    new QRCode(container, { text: url, width: 200, height: 200, colorDark: '#000', colorLight: '#fff' });
+  } catch(e) {}
+}
+</script>
+<script>
+  if ('serviceWorker' in navigator) {
+    navigator.serviceWorker.register('./sw.js').catch(e => console.log('SW:', e));
+  }
+</script>
+</body>
+</html>
