@@ -136,11 +136,6 @@
       background: linear-gradient(to top, #050505 0%, transparent 100%);
       pointer-events: none; z-index: 2;
     }
-    .guide-line {
-      position: absolute; left: 0; right: 0; top: 38%;
-      height: 0.5px; background: rgba(232,224,200,0.1);
-      pointer-events: none; z-index: 3;
-    }
 
     /* ── Play bar ── */
     .playbar {
@@ -291,8 +286,8 @@
 
     <div class="speed-group">
       <span class="speed-label">speed</span>
-      <input type="range" min="1" max="10" value="3" step="1" id="speedSlider" oninput="updateSpeed(this.value)">
-      <span class="speed-val" id="speedVal">3</span>
+      <input type="range" min="0" max="100" value="20" step="1" id="speedSlider" oninput="updateSpeed(this.value)">
+      <span class="speed-val" id="speedVal">20</span>
     </div>
 
     <div class="divider"></div>
@@ -314,7 +309,6 @@
     <div class="prompter-panel" id="prompterPanel">
       <div class="fade-top"></div>
       <div class="fade-bottom"></div>
-      <div class="guide-line"></div>
       <div class="prompter-scroll" id="prompterScroll">
         <div class="prompter-text" id="prompterText" style="font-size:28px"></div>
       </div>
@@ -330,7 +324,7 @@
         </button>
         <button class="fs-btn" onclick="speedUp()">+</button>
         <button class="fs-btn" onclick="changeFontSize(3)">A+</button>
-        <span class="fs-speed" id="fsSpeed">spd 3</span>
+        <span class="fs-speed" id="fsSpeed">spd 20</span>
         <button class="fs-btn" onclick="exitFullscreen()">✕</button>
       </div>
     </div>
@@ -383,7 +377,7 @@ let playing = false;
 let scrollY = 0;
 let raf = null;
 let fontSize = 28;
-let speed = 3;
+let speed = 20;
 let mirror = { h: false, v: false };
 let peer = null;
 let connections = [];
@@ -432,6 +426,10 @@ function toggleMirror(axis) {
   mirror[axis] = !mirror[axis];
   $('btnMirror' + axis.toUpperCase()).classList.toggle('on', mirror[axis]);
   applyMirror();
+  if (axis === 'v') {
+    const max = getMaxScroll();
+    if (max > 0) setScrollPos(max - scrollY);
+  }
   broadcast({ type: 'mirror', mirror });
 }
 
@@ -450,8 +448,8 @@ function updateSpeed(v) {
   if ($('speedSlider').value !== v) $('speedSlider').value = v;
   broadcast({ type: 'speed', speed });
 }
-function speedUp() { updateSpeed(Math.min(10, speed + 1)); }
-function speedDown() { updateSpeed(Math.max(1, speed - 1)); }
+function speedUp() { updateSpeed(Math.min(100, speed + 5)); }
+function speedDown() { updateSpeed(Math.max(0, speed - 5)); }
 
 // ── Scroll ──
 function getMaxScroll() {
@@ -461,17 +459,25 @@ function getMaxScroll() {
 }
 
 function setScrollPos(y) {
-  scrollY = Math.max(0, y);
+  scrollY = Math.max(0, Math.min(getMaxScroll(), y));
   $('prompterScroll').style.transform = 'translateY(' + (-scrollY) + 'px)';
   const max = getMaxScroll();
-  $('progressFill').style.width = max > 0 ? Math.min(100, (scrollY / max) * 100).toFixed(1) + '%' : '0%';
+  const ratio = max > 0 ? scrollY / max : 0;
+  const pct = mirror.v ? (1 - ratio) : ratio;
+  $('progressFill').style.width = (Math.min(1, pct) * 100).toFixed(1) + '%';
 }
 
 function animate() {
   if (!playing) return;
-  scrollY += speed * 0.45;
-  const max = getMaxScroll();
-  if (scrollY >= max) { scrollY = max; setScrollPos(scrollY); stopPlay(); return; }
+  const delta = speed * 0.04;
+  if (mirror.v) {
+    scrollY -= delta;
+    if (scrollY <= 0) { scrollY = 0; setScrollPos(0); stopPlay(); return; }
+  } else {
+    scrollY += delta;
+    const max = getMaxScroll();
+    if (scrollY >= max) { scrollY = max; setScrollPos(scrollY); stopPlay(); return; }
+  }
   setScrollPos(scrollY);
   raf = requestAnimationFrame(animate);
 }
@@ -507,20 +513,53 @@ function setPlayIcon(isPlaying) {
 
 function resetScroll() {
   stopPlay();
-  scrollY = 0;
-  setScrollPos(0);
+  setScrollPos(mirror.v ? getMaxScroll() : 0);
   broadcast({ type: 'reset' });
 }
 
 function seekTo(e) {
   const bar = $('progressBar');
   const ratio = e.offsetX / bar.clientWidth;
-  setScrollPos(ratio * getMaxScroll());
+  const max = getMaxScroll();
+  setScrollPos(mirror.v ? (1 - ratio) * max : ratio * max);
 }
 
+// ── Drag to scroll ──
+let dragStartY = null;
+let dragScrollOrigin = 0;
+let wasDrag = false;
+
+const prompterPanel = $('prompterPanel');
+
+prompterPanel.addEventListener('pointerdown', e => {
+  if (e.target.closest('.fs-controls')) return;
+  dragStartY = e.clientY;
+  dragScrollOrigin = scrollY;
+  wasDrag = false;
+  if (raf) { cancelAnimationFrame(raf); raf = null; }
+  prompterPanel.setPointerCapture(e.pointerId);
+});
+
+prompterPanel.addEventListener('pointermove', e => {
+  if (dragStartY === null) return;
+  const dy = dragStartY - e.clientY;
+  if (Math.abs(dy) > 5) wasDrag = true;
+  setScrollPos(dragScrollOrigin + (mirror.v ? -dy : dy));
+});
+
+prompterPanel.addEventListener('pointerup', () => {
+  dragStartY = null;
+  if (playing) raf = requestAnimationFrame(animate);
+});
+
+prompterPanel.addEventListener('pointercancel', () => {
+  dragStartY = null;
+  if (playing) raf = requestAnimationFrame(animate);
+});
+
 // ── Tap zones (fullscreen) ──
-function tapLeft() { stopPlay(); }
-function tapRight() { startPlay(); }
+function tapLeft() { if (!wasDrag) stopPlay(); }
+function tapRight() { if (!wasDrag) startPlay(); }
 
 // ── Fullscreen ──
 function enterFullscreen() {
