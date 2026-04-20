@@ -133,6 +133,27 @@
     .fmt-label { font-size: 12px; color: var(--text3); margin-right: 2px; }
     .fmt-val { font-size: 13px; color: var(--accent); min-width: 28px; text-align: center; }
 
+    /* ── Color swatch panel ── */
+    .color-panel {
+      display: none; flex-wrap: wrap; align-items: center; gap: 10px;
+      padding: 10px 14px; background: #0c0c0c; border-bottom: 0.5px solid #1a1a1a;
+      flex-shrink: 0;
+    }
+    .color-panel.open { display: flex; }
+    .color-panel-swatches { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
+    .color-swatch {
+      width: 30px; height: 30px; border-radius: 50%;
+      border: 1.5px solid rgba(255,255,255,0.15); cursor: pointer; flex-shrink: 0;
+      transition: transform 0.1s; -webkit-tap-highlight-color: transparent;
+    }
+    .color-swatch:active { transform: scale(0.85); }
+    .color-swatch-clear {
+      width: 30px; height: 30px; border-radius: 50%;
+      border: 1.5px dashed #555; cursor: pointer; background: transparent;
+      flex-shrink: 0; font-size: 16px; color: #555; line-height: 28px; text-align: center;
+      -webkit-tap-highlight-color: transparent;
+    }
+
     /* ── Edit / Prompter mode ── */
     .app.edit-mode .prompter-panel { display: none; }
     .app.edit-mode .remote-panel   { display: none; }
@@ -359,15 +380,12 @@
         </div>
         <div class="fmt-divider"></div>
         <div class="fmt-group">
-          <button class="fmt-btn" onclick="pickColor('fmtTextColor')" title="Text color">
+          <button class="fmt-btn" id="fmtTextColorBtn" onclick="toggleColorPanel('text')" title="Text color">
             A<div class="color-bar" id="fmtTextColorBar" style="background:#f0ead8"></div>
           </button>
-          <input type="color" id="fmtTextColor" style="display:none" value="#f0ead8" onchange="applyTextColor(this.value)">
-          <button class="fmt-btn" onclick="pickColor('fmtHighlight')" title="Highlight">
+          <button class="fmt-btn" id="fmtHighlightBtn" onclick="toggleColorPanel('hl')" title="Highlight">
             H<div class="color-bar" id="fmtHighlightBar" style="background:#ffff00"></div>
           </button>
-          <input type="color" id="fmtHighlight" style="display:none" value="#ffff00" onchange="applyHighlight(this.value)">
-          <button class="fmt-btn fmt-strike" onclick="clearHighlight()" title="Remove highlight" style="font-size:10px">H✕</button>
         </div>
         <div class="fmt-divider"></div>
         <div class="fmt-group">
@@ -398,6 +416,9 @@
           <span class="fmt-val" id="lsVal">0</span>
           <button class="fmt-btn" onclick="adjLetterSpacing(0.5)">+</button>
         </div>
+      </div>
+      <div class="color-panel" id="colorPanel">
+        <div class="color-panel-swatches" id="colorPanelSwatches"></div>
       </div>
       <div id="scriptInput" class="editor-content" contenteditable="true" spellcheck="false"></div>
     </div>
@@ -497,7 +518,7 @@ let lineHeight = 1.6;
 let letterSpacing = 0;
 let textAlign = 'left';
 let fontFamily = "'Playfair Display',serif";
-let savedRange = null;
+let activeColorMode = null;
 
 const $ = id => document.getElementById(id);
 
@@ -537,6 +558,7 @@ $('app').classList.add('edit-mode');
 $('formatToolbar').addEventListener('mousedown', e => {
   if (e.target.tagName !== 'INPUT' && e.target.tagName !== 'SELECT') e.preventDefault();
 });
+$('colorPanel').addEventListener('mousedown', e => e.preventDefault());
 
 // ── Selection state tracking ──
 document.addEventListener('selectionchange', () => {
@@ -554,33 +576,52 @@ function fmt(cmd) {
   syncText();
 }
 
-function saveSelection() {
-  const sel = window.getSelection();
-  if (sel && sel.rangeCount > 0) {
-    const range = sel.getRangeAt(0);
-    if ($('scriptInput').contains(range.commonAncestorContainer)) {
-      savedRange = range.cloneRange();
-    }
+const TEXT_COLORS = ['#f0ead8','#ffffff','#ffff00','#ff6b6b','#6bffb8','#6bb5ff','#ff9f43','#cc99ff'];
+const HL_COLORS   = ['#ffff00','#ffd700','#ff6b6b','#90ee90','#87ceeb','#ff99cc','#ffaa44'];
+
+function toggleColorPanel(mode) {
+  const panel = $('colorPanel');
+  if (activeColorMode === mode && panel.classList.contains('open')) {
+    panel.classList.remove('open');
+    activeColorMode = null;
+    return;
   }
+  activeColorMode = mode;
+  const swatches = $('colorPanelSwatches');
+  swatches.innerHTML = '';
+  const colors = mode === 'text' ? TEXT_COLORS : HL_COLORS;
+  colors.forEach(c => {
+    const btn = document.createElement('button');
+    btn.className = 'color-swatch';
+    btn.style.background = c;
+    btn.addEventListener('mousedown', e => e.preventDefault());
+    btn.addEventListener('touchend', e => { e.preventDefault(); applyColor(mode, c); });
+    btn.addEventListener('click', () => applyColor(mode, c));
+    swatches.appendChild(btn);
+  });
+  if (mode === 'hl') {
+    const clearBtn = document.createElement('button');
+    clearBtn.className = 'color-swatch-clear';
+    clearBtn.textContent = '✕';
+    clearBtn.title = 'Remove highlight';
+    clearBtn.addEventListener('mousedown', e => e.preventDefault());
+    clearBtn.addEventListener('touchend', e => { e.preventDefault(); clearHighlight(); panel.classList.remove('open'); activeColorMode = null; });
+    clearBtn.addEventListener('click', () => { clearHighlight(); panel.classList.remove('open'); activeColorMode = null; });
+    swatches.appendChild(clearBtn);
+  }
+  panel.classList.add('open');
 }
 
-function restoreSelection() {
-  $('scriptInput').focus();
-  if (savedRange) {
-    const sel = window.getSelection();
-    if (sel) { sel.removeAllRanges(); sel.addRange(savedRange); }
-  }
-}
-
-function pickColor(id) {
-  saveSelection();
-  $(id).click();
+function applyColor(mode, c) {
+  if (mode === 'text') applyTextColor(c);
+  else applyHighlight(c);
+  $('colorPanel').classList.remove('open');
+  activeColorMode = null;
 }
 
 // Wrap the current selection in a <span> with a CSS property applied.
 // Works on Safari/iOS where execCommand color commands are broken.
 function applySpanStyle(cssProp, cssVal) {
-  restoreSelection();
   const sel = window.getSelection();
   if (!sel || !sel.rangeCount || sel.isCollapsed) return;
   const range = sel.getRangeAt(0);
