@@ -11,7 +11,7 @@
   <link rel="apple-touch-icon" href="icons/icon-192.png">
   <title>Prompter</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Playfair+Display:wght@700&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Open+Sans:ital,wght@0,400;0,600;1,400&family=Playfair+Display:ital,wght@0,700;1,700&display=swap" rel="stylesheet">
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
@@ -100,12 +100,49 @@
       color: var(--text3); padding: 8px 14px;
       border-bottom: 0.5px solid #1a1a1a;
     }
-    textarea {
+    /* ── Format toolbar ── */
+    .format-toolbar {
+      display: flex; flex-wrap: wrap; align-items: center;
+      gap: 2px; padding: 5px 8px;
+      background: #0c0c0c; border-bottom: 0.5px solid #1a1a1a;
+      flex-shrink: 0;
+    }
+    .fmt-group { display: flex; align-items: center; gap: 1px; }
+    .fmt-divider { width: 0.5px; height: 16px; background: #222; margin: 0 3px; flex-shrink: 0; }
+    .fmt-btn {
+      position: relative;
+      background: transparent; border: none; color: var(--text2);
+      width: 24px; height: 24px; border-radius: 3px; font-size: 12px;
+      cursor: pointer; display: flex; align-items: center; justify-content: center;
+      flex-direction: column; gap: 0; transition: all 0.1s;
+      font-family: 'DM Mono', monospace; flex-shrink: 0;
+      -webkit-tap-highlight-color: transparent;
+    }
+    .fmt-btn:hover { background: #1e1e1e; color: #fff; }
+    .fmt-btn.on { background: rgba(232,224,200,0.15); color: var(--accent); }
+    .fmt-bold { font-weight: 700; }
+    .fmt-italic { font-style: italic; }
+    .fmt-underline { text-decoration: underline; }
+    .fmt-strike { text-decoration: line-through; }
+    .color-bar { position: absolute; bottom: 2px; left: 3px; right: 3px; height: 2px; border-radius: 1px; }
+    .fmt-select {
+      background: #111; border: 0.5px solid #333; color: var(--text2);
+      font-family: 'DM Mono', monospace; font-size: 10px;
+      padding: 2px 4px; border-radius: 3px; outline: none; cursor: pointer; height: 24px;
+    }
+    .fmt-label { font-size: 10px; color: var(--text3); margin-right: 1px; }
+    .fmt-val { font-size: 11px; color: var(--accent); min-width: 22px; text-align: center; }
+
+    /* ── Editor content (replaces textarea) ── */
+    .editor-content {
       flex: 1; background: var(--bg3); border: none; outline: none;
       color: var(--text2); font-family: 'DM Mono', monospace;
-      font-size: 13px; line-height: 1.75; padding: 14px; resize: none;
+      font-size: 13px; line-height: 1.75; padding: 14px;
+      overflow-y: auto; overflow-x: hidden;
+      -webkit-user-select: text; user-select: text; cursor: text;
     }
-    textarea::placeholder { color: #2a2a2a; }
+    .editor-content:empty::before { content: 'Paste your script here…'; color: #2a2a2a; pointer-events: none; }
+    .editor-content > div, .editor-content > p { margin: 0; min-height: 1.2em; }
 
     /* ── Prompter panel ── */
     .prompter-panel { flex: 1; position: relative; overflow: hidden; background: #050505; }
@@ -119,10 +156,9 @@
     .prompter-text {
       font-family: 'Playfair Display', serif;
       font-weight: 700;
-      line-height: 1.55;
+      line-height: 1.6;
       color: var(--text);
       word-break: break-word;
-      white-space: pre-wrap;
       transition: font-size 0.1s;
     }
 
@@ -262,6 +298,7 @@
     }
     .fs-play svg { width: 12px; height: 12px; fill: #0a0a0a; }
     .fs-speed { font-size: 12px; color: var(--text3); }
+    .fs-btn.on { color: var(--accent); }
   </style>
 </head>
 <body>
@@ -303,7 +340,56 @@
     <!-- Editor -->
     <div class="editor-panel">
       <div class="panel-header">Script editor</div>
-      <textarea id="scriptInput" placeholder="Paste your script here..."></textarea>
+      <div class="format-toolbar" id="formatToolbar">
+        <div class="fmt-group">
+          <button class="fmt-btn fmt-bold"      id="fmtBold"      onclick="fmt('bold')"          title="Bold">B</button>
+          <button class="fmt-btn fmt-italic"    id="fmtItalic"    onclick="fmt('italic')"        title="Italic">I</button>
+          <button class="fmt-btn fmt-underline" id="fmtUnderline" onclick="fmt('underline')"     title="Underline">U</button>
+          <button class="fmt-btn fmt-strike"    id="fmtStrike"    onclick="fmt('strikethrough')" title="Strikethrough">S</button>
+        </div>
+        <div class="fmt-divider"></div>
+        <div class="fmt-group">
+          <button class="fmt-btn" onclick="pickColor('fmtTextColor')" title="Text color">
+            A<div class="color-bar" id="fmtTextColorBar" style="background:#f0ead8"></div>
+          </button>
+          <input type="color" id="fmtTextColor" style="display:none" value="#f0ead8" onchange="applyTextColor(this.value)">
+          <button class="fmt-btn" onclick="pickColor('fmtHighlight')" title="Highlight">
+            H<div class="color-bar" id="fmtHighlightBar" style="background:#ffff00"></div>
+          </button>
+          <input type="color" id="fmtHighlight" style="display:none" value="#ffff00" onchange="applyHighlight(this.value)">
+          <button class="fmt-btn fmt-strike" onclick="clearHighlight()" title="Remove highlight" style="font-size:10px">H✕</button>
+        </div>
+        <div class="fmt-divider"></div>
+        <div class="fmt-group">
+          <button class="fmt-btn" id="fmtAlignLeft"   onclick="setAlign('left')"   title="Align left">⬅</button>
+          <button class="fmt-btn" id="fmtAlignCenter" onclick="setAlign('center')" title="Center">≡</button>
+          <button class="fmt-btn" id="fmtAlignRight"  onclick="setAlign('right')"  title="Align right">➡</button>
+        </div>
+        <div class="fmt-divider"></div>
+        <div class="fmt-group">
+          <select class="fmt-select" id="fmtFont" onchange="setFont(this.value)" title="Font family">
+            <option value="'Playfair Display',serif">Playfair</option>
+            <option value="'Open Sans',sans-serif">Open Sans</option>
+            <option value="'DM Mono',monospace">DM Mono</option>
+            <option value="Georgia,serif">Georgia</option>
+            <option value="Arial,sans-serif">Arial</option>
+          </select>
+        </div>
+        <div class="fmt-divider"></div>
+        <div class="fmt-group">
+          <span class="fmt-label">↕</span>
+          <button class="fmt-btn" onclick="adjLineHeight(-0.1)">−</button>
+          <span class="fmt-val" id="lhVal">1.6</span>
+          <button class="fmt-btn" onclick="adjLineHeight(0.1)">+</button>
+        </div>
+        <div class="fmt-group" style="margin-left:4px">
+          <span class="fmt-label">↔</span>
+          <button class="fmt-btn" onclick="adjLetterSpacing(-0.5)">−</button>
+          <span class="fmt-val" id="lsVal">0</span>
+          <button class="fmt-btn" onclick="adjLetterSpacing(0.5)">+</button>
+        </div>
+      </div>
+      <div id="scriptInput" class="editor-content" contenteditable="true" spellcheck="false"></div>
     </div>
 
     <!-- Prompter -->
@@ -318,6 +404,9 @@
       <div class="tap-zone tap-right" onclick="tapRight()"></div>
       <!-- Fullscreen controls -->
       <div class="fs-controls">
+        <button class="fs-btn" id="fsBtnMirrorH" onclick="toggleMirror('h')" title="Flip H">↔</button>
+        <button class="fs-btn" id="fsBtnMirrorV" onclick="toggleMirror('v')" title="Flip V">↕</button>
+        <div style="width:0.5px;height:16px;background:#444;margin:0 2px;flex-shrink:0"></div>
         <button class="fs-btn" onclick="changeFontSize(-3)">A−</button>
         <button class="fs-btn" onclick="speedDown()">−</button>
         <button class="fs-play" id="fsPlayBtn" onclick="togglePlay()">
@@ -393,22 +482,32 @@ let peer = null;
 let connections = [];
 let remoteOpen = false;
 let fsMode = false;
+let lineHeight = 1.6;
+let letterSpacing = 0;
+let textAlign = 'left';
+let fontFamily = "'Playfair Display',serif";
+let savedRange = null;
 
 const $ = id => document.getElementById(id);
 
 // ── Text sync ──
 function syncText() {
-  const txt = $('scriptInput').value;
-  $('prompterText').textContent = txt;
+  $('prompterText').innerHTML = $('scriptInput').innerHTML;
+  applyTypography();
   applyMirror();
-  const w = txt.trim().split(/\s+/).filter(Boolean).length;
+  const w = $('scriptInput').textContent.trim().split(/\s+/).filter(Boolean).length;
   $('wordCount').textContent = w + ' word' + (w !== 1 ? 's' : '');
 }
 
 $('scriptInput').addEventListener('input', syncText);
 
 // Default script
-$('scriptInput').value = `Welcome to Prompter.
+function textToHTML(str) {
+  const d = document.createElement('div');
+  d.textContent = str;
+  return d.innerHTML.replace(/\n/g, '<br>');
+}
+$('scriptInput').innerHTML = textToHTML(`Welcome to Prompter.
 
 Paste your script here and tap Play. Use the speed slider to control scroll pace, and A+ / A− to resize the text.
 
@@ -419,8 +518,102 @@ Open the Remote panel to control this from your phone — no app needed.
 
 Tap the ⤢ Full button to go fullscreen. Tap left half to pause, right half to play.
 
-You're always one take away from your best performance.`;
+You're always one take away from your best performance.`);
 syncText();
+
+// ── Format toolbar: prevent stealing focus from editor ──
+$('formatToolbar').addEventListener('mousedown', e => {
+  if (e.target.tagName !== 'INPUT' && e.target.tagName !== 'SELECT') e.preventDefault();
+});
+
+// ── Selection state tracking ──
+document.addEventListener('selectionchange', () => {
+  if (!$('scriptInput').contains(document.getSelection().anchorNode)) return;
+  $('fmtBold').classList.toggle('on',      document.queryCommandState('bold'));
+  $('fmtItalic').classList.toggle('on',    document.queryCommandState('italic'));
+  $('fmtUnderline').classList.toggle('on', document.queryCommandState('underline'));
+  $('fmtStrike').classList.toggle('on',    document.queryCommandState('strikethrough'));
+});
+
+// ── Formatting functions ──
+function fmt(cmd) {
+  document.execCommand(cmd, false, null);
+  $('scriptInput').focus();
+  syncText();
+}
+
+function saveSelection() {
+  const sel = window.getSelection();
+  if (sel && sel.rangeCount > 0) savedRange = sel.getRangeAt(0).cloneRange();
+}
+
+function restoreSelection() {
+  const sel = window.getSelection();
+  if (savedRange && sel) { sel.removeAllRanges(); sel.addRange(savedRange); }
+}
+
+function pickColor(id) {
+  saveSelection();
+  $(id).click();
+}
+
+function applyTextColor(color) {
+  $('fmtTextColorBar').style.background = color;
+  restoreSelection();
+  document.execCommand('foreColor', false, color);
+  syncText();
+}
+
+function applyHighlight(color) {
+  $('fmtHighlightBar').style.background = color;
+  restoreSelection();
+  if (!document.execCommand('hiliteColor', false, color)) document.execCommand('backColor', false, color);
+  syncText();
+}
+
+function clearHighlight() {
+  if (!document.execCommand('hiliteColor', false, 'transparent')) document.execCommand('backColor', false, 'transparent');
+  syncText();
+}
+
+// ── Typography (global) ──
+function applyTypography() {
+  const pt = $('prompterText');
+  pt.style.fontFamily   = fontFamily;
+  pt.style.textAlign    = textAlign;
+  pt.style.lineHeight   = lineHeight;
+  pt.style.letterSpacing = letterSpacing + 'px';
+}
+
+function setFont(family) {
+  fontFamily = family;
+  $('scriptInput').style.fontFamily = family;
+  applyTypography();
+  syncText();
+}
+
+function setAlign(align) {
+  textAlign = align;
+  $('scriptInput').style.textAlign = align;
+  ['left','center','right'].forEach(a =>
+    $('fmtAlign' + a.charAt(0).toUpperCase() + a.slice(1)).classList.toggle('on', a === align)
+  );
+  applyTypography();
+}
+
+function adjLineHeight(d) {
+  lineHeight = Math.max(1.0, Math.min(3.0, parseFloat((lineHeight + d).toFixed(1))));
+  $('lhVal').textContent = lineHeight.toFixed(1);
+  $('scriptInput').style.lineHeight = lineHeight;
+  applyTypography();
+}
+
+function adjLetterSpacing(d) {
+  letterSpacing = Math.max(-2, Math.min(10, parseFloat((letterSpacing + d).toFixed(1))));
+  $('lsVal').textContent = letterSpacing;
+  $('scriptInput').style.letterSpacing = letterSpacing + 'px';
+  applyTypography();
+}
 
 // ── Mirror ──
 function applyMirror() {
@@ -434,9 +627,16 @@ function applyMirror() {
 
 function toggleMirror(axis) {
   mirror[axis] = !mirror[axis];
-  $('btnMirror' + axis.toUpperCase()).classList.toggle('on', mirror[axis]);
   applyMirror();
+  updateMirrorBtns();
   broadcast({ type: 'mirror', mirror });
+}
+
+function updateMirrorBtns() {
+  $('btnMirrorH').classList.toggle('on',   mirror.h);
+  $('btnMirrorV').classList.toggle('on',   mirror.v);
+  $('fsBtnMirrorH').classList.toggle('on', mirror.h);
+  $('fsBtnMirrorV').classList.toggle('on', mirror.v);
 }
 
 // ── Font size ──
@@ -455,14 +655,12 @@ function updateSpeed(v) {
   if ($('speedSlider').value !== v) $('speedSlider').value = v;
   broadcast({ type: 'speed', speed });
 }
-function speedUp() { updateSpeed(Math.min(100, speed + 5)); }
-function speedDown() { updateSpeed(Math.max(0, speed - 5)); }
+function speedUp()   { updateSpeed(Math.min(100, speed + 5)); }
+function speedDown() { updateSpeed(Math.max(0,   speed - 5)); }
 
 // ── Scroll ──
 function getMaxScroll() {
-  const panel = $('prompterPanel');
-  const scroll = $('prompterScroll');
-  return Math.max(0, scroll.scrollHeight - panel.clientHeight);
+  return Math.max(0, $('prompterScroll').scrollHeight - $('prompterPanel').clientHeight);
 }
 
 function setScrollPos(y) {
@@ -483,9 +681,7 @@ function animate() {
 }
 
 // ── Play control ──
-function togglePlay() {
-  if (playing) stopPlay(); else startPlay();
-}
+function togglePlay() { if (playing) stopPlay(); else startPlay(); }
 
 function startPlay() {
   playing = true;
@@ -505,8 +701,8 @@ function stopPlay() {
 
 function setPlayIcon(isPlaying) {
   const pause = '<rect x="2" y="1" width="4" height="14"/><rect x="10" y="1" width="4" height="14"/>';
-  const play = '<polygon points="3,1 14,8 3,15"/>';
-  const icon = isPlaying ? pause : play;
+  const play  = '<polygon points="3,1 14,8 3,15"/>';
+  const icon  = isPlaying ? pause : play;
   $('playIcon').innerHTML = icon;
   $('fsPlayIcon').innerHTML = icon;
 }
@@ -519,8 +715,7 @@ function resetScroll() {
 
 function seekTo(e) {
   const bar = $('progressBar');
-  const ratio = e.offsetX / bar.clientWidth;
-  setScrollPos(ratio * getMaxScroll());
+  setScrollPos((e.offsetX / bar.clientWidth) * getMaxScroll());
 }
 
 // ── Drag to scroll ──
@@ -557,7 +752,7 @@ prompterPanel.addEventListener('pointercancel', () => {
 });
 
 // ── Tap zones (fullscreen) ──
-function tapLeft() { if (!wasDrag) stopPlay(); }
+function tapLeft()  { if (!wasDrag) stopPlay(); }
 function tapRight() { if (!wasDrag) startPlay(); }
 
 // ── Fullscreen ──
@@ -579,11 +774,11 @@ function exitFullscreen() {
 }
 
 document.addEventListener('keydown', e => {
-  if (e.code === 'Space') { e.preventDefault(); togglePlay(); }
-  if (e.code === 'ArrowUp') changeFontSize(2);
-  if (e.code === 'ArrowDown') changeFontSize(-2);
-  if (e.code === 'ArrowRight') speedUp();
-  if (e.code === 'ArrowLeft') speedDown();
+  if (e.code === 'Space' && document.activeElement !== $('scriptInput')) { e.preventDefault(); togglePlay(); }
+  if (e.code === 'ArrowUp'    && !e.target.isContentEditable) changeFontSize(2);
+  if (e.code === 'ArrowDown'  && !e.target.isContentEditable) changeFontSize(-2);
+  if (e.code === 'ArrowRight' && !e.target.isContentEditable) speedUp();
+  if (e.code === 'ArrowLeft'  && !e.target.isContentEditable) speedDown();
   if (e.code === 'Escape') exitFullscreen();
 });
 
@@ -599,7 +794,6 @@ function toggleRemote() {
 function initPeer() {
   setConnStatus('dot', ''); setConnStatus('label', 'Connecting…');
 
-  // Generate a short random code and use it as the peer ID prefix
   const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
   let code = '';
   for (let i = 0; i < 6; i++) code += chars[Math.floor(Math.random() * chars.length)];
@@ -617,14 +811,10 @@ function initPeer() {
     conn.on('open', () => {
       connections.push(conn);
       addPeer(conn.peer);
-      // Send current state
       conn.send({ type: 'state', playing, speed, fontSize, mirror });
     });
     conn.on('data', handleRemoteCommand);
-    conn.on('close', () => {
-      connections = connections.filter(c => c !== conn);
-      removePeer(conn.peer);
-    });
+    conn.on('close', () => { connections = connections.filter(c => c !== conn); removePeer(conn.peer); });
   });
 
   peer.on('error', err => {
@@ -633,14 +823,19 @@ function initPeer() {
 }
 
 function handleRemoteCommand(cmd) {
-  if (cmd.type === 'play') startPlay();
-  else if (cmd.type === 'pause') stopPlay();
-  else if (cmd.type === 'reset') resetScroll();
-  else if (cmd.type === 'speed') updateSpeed(cmd.speed);
-  else if (cmd.type === 'fontSize') { fontSize = cmd.fontSize; $('prompterText').style.fontSize = fontSize + 'px'; }
-  else if (cmd.type === 'mirror') { mirror = cmd.mirror; applyMirror(); updateMirrorBtns(); }
-  else if (cmd.type === 'script') { $('scriptInput').value = cmd.text; syncText(); }
-  else if (cmd.type === 'seek') setScrollPos(cmd.ratio * getMaxScroll());
+  if      (cmd.type === 'play')     startPlay();
+  else if (cmd.type === 'pause')    stopPlay();
+  else if (cmd.type === 'reset')    resetScroll();
+  else if (cmd.type === 'speed')    updateSpeed(cmd.speed);
+  else if (cmd.type === 'fontSize') { fontSize = cmd.fontSize; $('prompterText').style.fontSize = fontSize + 'px'; $('fontVal').textContent = fontSize; }
+  else if (cmd.type === 'mirror')   { mirror = cmd.mirror; applyMirror(); updateMirrorBtns(); }
+  else if (cmd.type === 'script')   {
+    const d = document.createElement('div');
+    d.textContent = cmd.text;
+    $('scriptInput').innerHTML = d.innerHTML.replace(/\n/g, '<br>');
+    syncText();
+  }
+  else if (cmd.type === 'seek')     setScrollPos(cmd.ratio * getMaxScroll());
 }
 
 function broadcast(msg) {
@@ -649,12 +844,8 @@ function broadcast(msg) {
 
 function setConnStatus(part, cls) {
   if (part === 'dot') {
-    const d = $('connDot');
-    d.className = 'conn-dot';
-    if (cls) d.classList.add(cls);
-  } else {
-    $('connLabel').textContent = cls;
-  }
+    const d = $('connDot'); d.className = 'conn-dot'; if (cls) d.classList.add(cls);
+  } else { $('connLabel').textContent = cls; }
 }
 
 function addPeer(id) {
@@ -663,8 +854,7 @@ function addPeer(id) {
   div.className = 'peer-item'; div.id = 'peer-' + id;
   div.innerHTML = '<div class="peer-dot"></div><span>Controller connected</span>';
   $('peersList').appendChild(div);
-  setConnStatus('dot', 'connected');
-  setConnStatus('label', 'Controller connected');
+  setConnStatus('dot', 'connected'); setConnStatus('label', 'Controller connected');
 }
 
 function removePeer(id) {
@@ -672,14 +862,8 @@ function removePeer(id) {
   if (el) el.remove();
   if (connections.length === 0) {
     $('noPeers').style.display = 'block';
-    setConnStatus('dot', 'ready');
-    setConnStatus('label', 'Ready — share code or QR');
+    setConnStatus('dot', 'ready'); setConnStatus('label', 'Ready — share code or QR');
   }
-}
-
-function updateMirrorBtns() {
-  $('btnMirrorH').classList.toggle('on', mirror.h);
-  $('btnMirrorV').classList.toggle('on', mirror.v);
 }
 
 // ── QR Code ──
@@ -687,10 +871,8 @@ function generateQR(code) {
   const container = $('qrCanvas');
   container.innerHTML = '';
   const base = window.location.href.replace(/\/index\.html.*$/, '').replace(/\/$/, '');
-  const url = base + '/remote.html#' + code;
-  try {
-    new QRCode(container, { text: url, width: 200, height: 200, colorDark: '#000', colorLight: '#fff' });
-  } catch(e) {}
+  const url  = base + '/remote.html#' + code;
+  try { new QRCode(container, { text: url, width: 200, height: 200, colorDark: '#000', colorLight: '#fff' }); } catch(e) {}
 }
 </script>
 <script>
