@@ -103,16 +103,16 @@
     /* ── Format toolbar ── */
     .format-toolbar {
       display: flex; flex-wrap: wrap; align-items: center;
-      gap: 2px; padding: 5px 8px;
+      gap: 4px; padding: 8px 12px;
       background: #0c0c0c; border-bottom: 0.5px solid #1a1a1a;
       flex-shrink: 0;
     }
-    .fmt-group { display: flex; align-items: center; gap: 1px; }
-    .fmt-divider { width: 0.5px; height: 16px; background: #222; margin: 0 3px; flex-shrink: 0; }
+    .fmt-group { display: flex; align-items: center; gap: 3px; }
+    .fmt-divider { width: 0.5px; height: 20px; background: #222; margin: 0 4px; flex-shrink: 0; }
     .fmt-btn {
       position: relative;
       background: transparent; border: none; color: var(--text2);
-      width: 24px; height: 24px; border-radius: 3px; font-size: 12px;
+      width: 36px; height: 36px; border-radius: 6px; font-size: 15px;
       cursor: pointer; display: flex; align-items: center; justify-content: center;
       flex-direction: column; gap: 0; transition: all 0.1s;
       font-family: 'DM Mono', monospace; flex-shrink: 0;
@@ -124,14 +124,20 @@
     .fmt-italic { font-style: italic; }
     .fmt-underline { text-decoration: underline; }
     .fmt-strike { text-decoration: line-through; }
-    .color-bar { position: absolute; bottom: 2px; left: 3px; right: 3px; height: 2px; border-radius: 1px; }
+    .color-bar { position: absolute; bottom: 3px; left: 5px; right: 5px; height: 3px; border-radius: 1px; }
     .fmt-select {
       background: #111; border: 0.5px solid #333; color: var(--text2);
-      font-family: 'DM Mono', monospace; font-size: 10px;
-      padding: 2px 4px; border-radius: 3px; outline: none; cursor: pointer; height: 24px;
+      font-family: 'DM Mono', monospace; font-size: 12px;
+      padding: 4px 6px; border-radius: 6px; outline: none; cursor: pointer; height: 36px;
     }
-    .fmt-label { font-size: 10px; color: var(--text3); margin-right: 1px; }
-    .fmt-val { font-size: 11px; color: var(--accent); min-width: 22px; text-align: center; }
+    .fmt-label { font-size: 12px; color: var(--text3); margin-right: 2px; }
+    .fmt-val { font-size: 13px; color: var(--accent); min-width: 28px; text-align: center; }
+
+    /* ── Edit / Prompter mode ── */
+    .app.edit-mode .prompter-panel { display: none; }
+    .app.edit-mode .remote-panel   { display: none; }
+    .app.edit-mode .playbar        { display: none; }
+    .app.edit-mode .editor-panel   { flex: 1; width: auto; border-right: none; }
 
     /* ── Editor content (replaces textarea) ── */
     .editor-content {
@@ -309,6 +315,10 @@
     <span class="app-title">Prompter</span>
     <div class="divider"></div>
 
+    <button class="btn on" id="btnMode" onclick="toggleMode()">✎ Script</button>
+
+    <div class="divider"></div>
+
     <span class="tag">mirror</span>
     <button class="btn" id="btnMirrorH" onclick="toggleMirror('h')">↔ H</button>
     <button class="btn" id="btnMirrorV" onclick="toggleMirror('v')">↕ V</button>
@@ -482,6 +492,7 @@ let peer = null;
 let connections = [];
 let remoteOpen = false;
 let fsMode = false;
+let editMode = true;
 let lineHeight = 1.6;
 let letterSpacing = 0;
 let textAlign = 'left';
@@ -520,6 +531,7 @@ Tap the ⤢ Full button to go fullscreen. Tap left half to pause, right half to 
 
 You're always one take away from your best performance.`);
 syncText();
+$('app').classList.add('edit-mode');
 
 // ── Format toolbar: prevent stealing focus from editor ──
 $('formatToolbar').addEventListener('mousedown', e => {
@@ -544,12 +556,20 @@ function fmt(cmd) {
 
 function saveSelection() {
   const sel = window.getSelection();
-  if (sel && sel.rangeCount > 0) savedRange = sel.getRangeAt(0).cloneRange();
+  if (sel && sel.rangeCount > 0) {
+    const range = sel.getRangeAt(0);
+    if ($('scriptInput').contains(range.commonAncestorContainer)) {
+      savedRange = range.cloneRange();
+    }
+  }
 }
 
 function restoreSelection() {
-  const sel = window.getSelection();
-  if (savedRange && sel) { sel.removeAllRanges(); sel.addRange(savedRange); }
+  $('scriptInput').focus();
+  if (savedRange) {
+    const sel = window.getSelection();
+    if (sel) { sel.removeAllRanges(); sel.addRange(savedRange); }
+  }
 }
 
 function pickColor(id) {
@@ -557,23 +577,45 @@ function pickColor(id) {
   $(id).click();
 }
 
+// Wrap the current selection in a <span> with a CSS property applied.
+// Works on Safari/iOS where execCommand color commands are broken.
+function applySpanStyle(cssProp, cssVal) {
+  restoreSelection();
+  const sel = window.getSelection();
+  if (!sel || !sel.rangeCount || sel.isCollapsed) return;
+  const range = sel.getRangeAt(0);
+  if (!$('scriptInput').contains(range.commonAncestorContainer)) return;
+
+  const span = document.createElement('span');
+  span.style[cssProp] = cssVal;
+  try {
+    range.surroundContents(span);
+  } catch {
+    // Selection spans element boundaries — extract and rewrap
+    const frag = range.extractContents();
+    span.appendChild(frag);
+    range.insertNode(span);
+  }
+  // Leave selection covering the new span
+  const newRange = document.createRange();
+  newRange.selectNodeContents(span);
+  sel.removeAllRanges();
+  sel.addRange(newRange);
+  syncText();
+}
+
 function applyTextColor(color) {
   $('fmtTextColorBar').style.background = color;
-  restoreSelection();
-  document.execCommand('foreColor', false, color);
-  syncText();
+  applySpanStyle('color', color);
 }
 
 function applyHighlight(color) {
   $('fmtHighlightBar').style.background = color;
-  restoreSelection();
-  if (!document.execCommand('hiliteColor', false, color)) document.execCommand('backColor', false, color);
-  syncText();
+  applySpanStyle('backgroundColor', color);
 }
 
 function clearHighlight() {
-  if (!document.execCommand('hiliteColor', false, 'transparent')) document.execCommand('backColor', false, 'transparent');
-  syncText();
+  applySpanStyle('backgroundColor', 'transparent');
 }
 
 // ── Typography (global) ──
@@ -756,7 +798,16 @@ function tapLeft()  { if (!wasDrag) stopPlay(); }
 function tapRight() { if (!wasDrag) startPlay(); }
 
 // ── Fullscreen ──
+function toggleMode() {
+  editMode = !editMode;
+  $('app').classList.toggle('edit-mode', editMode);
+  $('btnMode').classList.toggle('on', editMode);
+  $('btnMode').textContent = editMode ? '✎ Script' : '▶ Prompter';
+  if (!editMode) syncText();
+}
+
 function enterFullscreen() {
+  if (editMode) toggleMode();
   fsMode = true;
   $('app').classList.add('fullscreen');
   $('btnFullscreen').classList.add('on');
