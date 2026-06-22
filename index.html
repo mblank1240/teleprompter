@@ -522,9 +522,20 @@ let activeColorMode = null;
 
 const $ = id => document.getElementById(id);
 
+// ── Strip inline font-size/family so the global A+/A− control always applies ──
+function stripFontOverrides(root) {
+  root.querySelectorAll('[style]').forEach(el => {
+    el.style.removeProperty('font-size');
+    el.style.removeProperty('font-family');
+  });
+}
+
 // ── Text sync ──
 function syncText() {
-  $('prompterText').innerHTML = $('scriptInput').innerHTML;
+  const tmp = document.createElement('div');
+  tmp.innerHTML = $('scriptInput').innerHTML;
+  stripFontOverrides(tmp);
+  $('prompterText').innerHTML = tmp.innerHTML;
   applyTypography();
   applyMirror();
   const w = $('scriptInput').textContent.trim().split(/\s+/).filter(Boolean).length;
@@ -532,6 +543,21 @@ function syncText() {
 }
 
 $('scriptInput').addEventListener('input', syncText);
+
+// ── Paste: strip font-size/family from pasted HTML so our controls apply ──
+$('scriptInput').addEventListener('paste', e => {
+  e.preventDefault();
+  const html = e.clipboardData.getData('text/html');
+  if (html) {
+    const tmp = document.createElement('div');
+    tmp.innerHTML = html;
+    stripFontOverrides(tmp);
+    document.execCommand('insertHTML', false, tmp.innerHTML);
+  } else {
+    document.execCommand('insertText', false, e.clipboardData.getData('text/plain'));
+  }
+  syncText();
+});
 
 // Default script
 function textToHTML(str) {
