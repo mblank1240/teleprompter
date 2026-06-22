@@ -726,6 +726,7 @@ function updateMirrorBtns() {
 function changeFontSize(d) {
   fontSize = Math.max(14, Math.min(72, fontSize + d));
   $('prompterText').style.fontSize = fontSize + 'px';
+  $('scriptInput').style.fontSize = fontSize + 'px';
   $('fontVal').textContent = fontSize;
   broadcast({ type: 'fontSize', fontSize });
 }
@@ -844,7 +845,10 @@ function toggleMode() {
   $('app').classList.toggle('edit-mode', editMode);
   $('btnMode').classList.toggle('on', editMode);
   $('btnMode').textContent = editMode ? '✎ Script' : '▶ Prompter';
-  if (!editMode) syncText();
+  if (!editMode) {
+    syncText();
+    enterFullscreen();
+  }
 }
 
 function enterFullscreen() {
