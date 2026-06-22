@@ -102,10 +102,7 @@
     }
     /* ── Format toolbar ── */
     .format-toolbar {
-      display: flex; flex-wrap: wrap; align-items: center;
-      gap: 4px; padding: 8px 12px;
-      background: #0c0c0c; border-bottom: 0.5px solid #1a1a1a;
-      flex-shrink: 0;
+      display: none;
     }
     .fmt-group { display: flex; align-items: center; gap: 3px; }
     .fmt-divider { width: 0.5px; height: 20px; background: #222; margin: 0 4px; flex-shrink: 0; }
@@ -522,20 +519,24 @@ let activeColorMode = null;
 
 const $ = id => document.getElementById(id);
 
-// ── Strip inline font-size/family so the global A+/A− control always applies ──
-function stripFontOverrides(root) {
-  root.querySelectorAll('[style]').forEach(el => {
-    el.style.removeProperty('font-size');
-    el.style.removeProperty('font-family');
+// ── Convert contenteditable HTML → plain text with line breaks ──
+function editorToPlainHTML(html) {
+  const tmp = document.createElement('div');
+  tmp.innerHTML = html;
+  // Insert newline before each block element so text runs together correctly
+  tmp.querySelectorAll('p, div').forEach(el => {
+    el.prepend(document.createTextNode('\n'));
   });
+  tmp.querySelectorAll('br').forEach(el => el.replaceWith('\n'));
+  return tmp.textContent
+    .replace(/^\n/, '')           // trim leading newline
+    .replace(/\n{3,}/g, '\n\n')  // collapse 3+ blank lines to 2
+    .replace(/\n/g, '<br>');      // back to HTML line breaks
 }
 
 // ── Text sync ──
 function syncText() {
-  const tmp = document.createElement('div');
-  tmp.innerHTML = $('scriptInput').innerHTML;
-  stripFontOverrides(tmp);
-  $('prompterText').innerHTML = tmp.innerHTML;
+  $('prompterText').innerHTML = editorToPlainHTML($('scriptInput').innerHTML);
   applyTypography();
   applyMirror();
   const w = $('scriptInput').textContent.trim().split(/\s+/).filter(Boolean).length;
@@ -544,18 +545,10 @@ function syncText() {
 
 $('scriptInput').addEventListener('input', syncText);
 
-// ── Paste: strip font-size/family from pasted HTML so our controls apply ──
+// ── Paste: plain text only so no external styles bleed in ──
 $('scriptInput').addEventListener('paste', e => {
   e.preventDefault();
-  const html = e.clipboardData.getData('text/html');
-  if (html) {
-    const tmp = document.createElement('div');
-    tmp.innerHTML = html;
-    stripFontOverrides(tmp);
-    document.execCommand('insertHTML', false, tmp.innerHTML);
-  } else {
-    document.execCommand('insertText', false, e.clipboardData.getData('text/plain'));
-  }
+  document.execCommand('insertText', false, e.clipboardData.getData('text/plain'));
   syncText();
 });
 
@@ -871,10 +864,7 @@ function toggleMode() {
   $('app').classList.toggle('edit-mode', editMode);
   $('btnMode').classList.toggle('on', editMode);
   $('btnMode').textContent = editMode ? '✎ Script' : '▶ Prompter';
-  if (!editMode) {
-    syncText();
-    enterFullscreen();
-  }
+  if (!editMode) syncText();
 }
 
 function enterFullscreen() {
