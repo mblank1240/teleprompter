@@ -336,7 +336,7 @@
     <span class="app-title">Prompter</span>
     <div class="divider"></div>
 
-    <button class="btn on" id="btnMode" onclick="toggleMode()">✎ Script</button>
+    <button class="btn on" id="btnMode" onclick="toggleMode()">Prompter Mode</button>
 
     <div class="divider"></div>
 
@@ -362,7 +362,6 @@
     <div class="divider"></div>
 
     <button class="btn" id="btnRemote" onclick="toggleRemote()">⊕ Remote</button>
-    <button class="btn" id="btnFullscreen" onclick="enterFullscreen()">⤢ Full</button>
   </div>
 
   <!-- ── Main ── -->
@@ -385,6 +384,9 @@
           </button>
           <button class="fmt-btn" id="fmtHighlightBtn" onclick="toggleColorPanel('hl')" title="Highlight">
             H<div class="color-bar" id="fmtHighlightBar" style="background:#ffff00"></div>
+          </button>
+          <button class="fmt-btn" id="fmtUnderlineColorBtn" onclick="toggleColorPanel('ul')" title="Underline color">
+            U<div class="color-bar" id="fmtUnderlineColorBar" style="background:#6bb5ff;text-decoration:underline"></div>
           </button>
         </div>
         <div class="fmt-divider"></div>
@@ -560,12 +562,9 @@ $('scriptInput').addEventListener('paste', e => {
 });
 
 // Default script
-function textToHTML(str) {
+{
   const d = document.createElement('div');
-  d.textContent = str;
-  return d.innerHTML.replace(/\n/g, '<br>');
-}
-$('scriptInput').innerHTML = textToHTML(`Welcome to Prompter.
+  d.textContent = `Welcome to Prompter.
 
 Paste your script here and tap Play. Use the speed slider to control scroll pace, and A+ / A− to resize the text.
 
@@ -574,9 +573,11 @@ Mirror V flips vertically for below-the-lens mounts.
 
 Open the Remote panel to control this from your phone — no app needed.
 
-Tap the ⤢ Full button to go fullscreen. Tap left half to pause, right half to play.
+Tap the Prompter Mode button to go fullscreen. Tap left half to pause, right half to play.
 
-You're always one take away from your best performance.`);
+You're always one take away from your best performance.`;
+  $('scriptInput').innerHTML = d.innerHTML.replace(/\n/g, '<br>');
+}
 syncText();
 $('app').classList.add('edit-mode');
 
@@ -615,7 +616,7 @@ function toggleColorPanel(mode) {
   activeColorMode = mode;
   const swatches = $('colorPanelSwatches');
   swatches.innerHTML = '';
-  const colors = mode === 'text' ? TEXT_COLORS : HL_COLORS;
+  const colors = mode === 'hl' ? HL_COLORS : TEXT_COLORS;
   colors.forEach(c => {
     const btn = document.createElement('button');
     btn.className = 'color-swatch';
@@ -625,14 +626,14 @@ function toggleColorPanel(mode) {
     btn.addEventListener('click', () => applyColor(mode, c));
     swatches.appendChild(btn);
   });
-  if (mode === 'hl') {
+  if (mode === 'hl' || mode === 'ul') {
     const clearBtn = document.createElement('button');
     clearBtn.className = 'color-swatch-clear';
     clearBtn.textContent = '✕';
-    clearBtn.title = 'Remove highlight';
+    clearBtn.title = mode === 'ul' ? 'Remove underline' : 'Remove highlight';
     clearBtn.addEventListener('mousedown', e => e.preventDefault());
-    clearBtn.addEventListener('touchend', e => { e.preventDefault(); clearHighlight(); panel.classList.remove('open'); activeColorMode = null; });
-    clearBtn.addEventListener('click', () => { clearHighlight(); panel.classList.remove('open'); activeColorMode = null; });
+    clearBtn.addEventListener('touchend', e => { e.preventDefault(); mode === 'ul' ? clearUnderlineColor() : clearHighlight(); panel.classList.remove('open'); activeColorMode = null; });
+    clearBtn.addEventListener('click', () => { mode === 'ul' ? clearUnderlineColor() : clearHighlight(); panel.classList.remove('open'); activeColorMode = null; });
     swatches.appendChild(clearBtn);
   }
   panel.classList.add('open');
@@ -640,6 +641,7 @@ function toggleColorPanel(mode) {
 
 function applyColor(mode, c) {
   if (mode === 'text') applyTextColor(c);
+  else if (mode === 'ul') applyUnderlineColor(c);
   else applyHighlight(c);
   $('colorPanel').classList.remove('open');
   activeColorMode = null;
@@ -663,9 +665,10 @@ function applySpanStyle(cssProp, cssVal) {
     span.appendChild(frag);
     range.insertNode(span);
   }
-  // Leave selection covering the new span
+  // Collapse cursor to end of span so the applied color is visible immediately
   const newRange = document.createRange();
-  newRange.selectNodeContents(span);
+  newRange.setStartAfter(span);
+  newRange.collapse(true);
   sel.removeAllRanges();
   sel.addRange(newRange);
   syncText();
@@ -682,7 +685,67 @@ function applyHighlight(color) {
 }
 
 function clearHighlight() {
-  applySpanStyle('backgroundColor', 'transparent');
+  const sel = window.getSelection();
+  if (!sel || !sel.rangeCount || sel.isCollapsed) return;
+  const range = sel.getRangeAt(0);
+  if (!$('scriptInput').contains(range.commonAncestorContainer)) return;
+
+  Array.from($('scriptInput').querySelectorAll('span[style]'))
+    .filter(s => range.intersectsNode(s) && s.style.backgroundColor)
+    .forEach(s => {
+      s.style.removeProperty('background-color');
+      if (!s.style.cssText.trim()) {
+        while (s.firstChild) s.parentNode.insertBefore(s.firstChild, s);
+        s.parentNode.removeChild(s);
+      }
+    });
+
+  syncText();
+}
+
+function applyUnderlineColor(color) {
+  $('fmtUnderlineColorBar').style.background = color;
+  const sel = window.getSelection();
+  if (!sel || !sel.rangeCount || sel.isCollapsed) return;
+  const range = sel.getRangeAt(0);
+  if (!$('scriptInput').contains(range.commonAncestorContainer)) return;
+
+  const span = document.createElement('span');
+  span.style.textDecoration = 'underline';
+  span.style.textDecorationColor = color;
+  try {
+    range.surroundContents(span);
+  } catch {
+    const frag = range.extractContents();
+    span.appendChild(frag);
+    range.insertNode(span);
+  }
+  const newRange = document.createRange();
+  newRange.setStartAfter(span);
+  newRange.collapse(true);
+  sel.removeAllRanges();
+  sel.addRange(newRange);
+  syncText();
+}
+
+function clearUnderlineColor() {
+  const sel = window.getSelection();
+  if (!sel || !sel.rangeCount || sel.isCollapsed) return;
+  const range = sel.getRangeAt(0);
+  if (!$('scriptInput').contains(range.commonAncestorContainer)) return;
+
+  Array.from($('scriptInput').querySelectorAll('span[style]'))
+    .filter(s => range.intersectsNode(s) && s.style.textDecorationColor)
+    .forEach(s => {
+      s.style.removeProperty('text-decoration-color');
+      s.style.removeProperty('text-decoration');
+      if (!s.style.cssText.trim()) {
+        while (s.firstChild) s.parentNode.insertBefore(s.firstChild, s);
+        s.parentNode.removeChild(s);
+      }
+    });
+
+  syncText();
 }
 
 // ── Typography (global) ──
@@ -774,11 +837,10 @@ function getMaxScroll() {
 }
 
 function setScrollPos(y) {
-  scrollY = Math.max(0, Math.min(getMaxScroll(), y));
-  $('prompterScroll').style.transform = 'translateY(' + (-scrollY) + 'px)';
   const max = getMaxScroll();
-  const ratio = max > 0 ? scrollY / max : 0;
-  $('progressFill').style.width = (ratio * 100).toFixed(1) + '%';
+  scrollY = Math.max(0, Math.min(max, y));
+  $('prompterScroll').style.transform = 'translateY(' + (-scrollY) + 'px)';
+  $('progressFill').style.width = (max > 0 ? (scrollY / max * 100).toFixed(1) : '0') + '%';
 }
 
 function animate() {
@@ -851,15 +913,12 @@ prompterPanel.addEventListener('pointermove', e => {
   setScrollPos(dragScrollOrigin + dy);
 });
 
-prompterPanel.addEventListener('pointerup', () => {
+function onDragEnd() {
   dragStartY = null;
   if (playing) raf = requestAnimationFrame(animate);
-});
-
-prompterPanel.addEventListener('pointercancel', () => {
-  dragStartY = null;
-  if (playing) raf = requestAnimationFrame(animate);
-});
+}
+prompterPanel.addEventListener('pointerup', onDragEnd);
+prompterPanel.addEventListener('pointercancel', onDragEnd);
 
 // ── Tap zones (fullscreen) ──
 function tapLeft()  { if (!wasDrag) stopPlay(); }
@@ -882,7 +941,6 @@ function goToEditMode() {
   $('app').classList.add('edit-mode');
   $('btnMode').classList.add('on');
   $('btnMode').textContent = '✎ Script';
-  $('btnFullscreen').classList.remove('on');
   if (document.exitFullscreen) document.exitFullscreen().catch(() => {});
   else if (document.webkitExitFullscreen) document.webkitExitFullscreen();
 }
@@ -898,7 +956,6 @@ function enterFullscreen() {
   }
   fsMode = true;
   $('app').classList.add('fullscreen');
-  $('btnFullscreen').classList.add('on');
   const el = document.documentElement;
   if (el.requestFullscreen) el.requestFullscreen();
   else if (el.webkitRequestFullscreen) el.webkitRequestFullscreen();
@@ -970,7 +1027,7 @@ function handleRemoteCommand(cmd) {
   else if (cmd.type === 'pause')    stopPlay();
   else if (cmd.type === 'reset')    resetScroll();
   else if (cmd.type === 'speed')    updateSpeed(cmd.speed);
-  else if (cmd.type === 'fontSize') { fontSize = cmd.fontSize; $('prompterText').style.fontSize = fontSize + 'px'; $('fontVal').textContent = fontSize; }
+  else if (cmd.type === 'fontSize') { fontSize = cmd.fontSize; $('prompterText').style.fontSize = fontSize + 'px'; $('scriptInput').style.fontSize = fontSize + 'px'; $('fontVal').textContent = fontSize; }
   else if (cmd.type === 'mirror')   { mirror = cmd.mirror; applyMirror(); updateMirrorBtns(); }
   else if (cmd.type === 'script')   {
     const d = document.createElement('div');
@@ -1001,7 +1058,7 @@ function addPeer(id) {
 }
 
 function removePeer(id) {
-  const el = document.getElementById('peer-' + id);
+  const el = $('peer-' + id);
   if (el) el.remove();
   if (connections.length === 0) {
     $('noPeers').style.display = 'block';
