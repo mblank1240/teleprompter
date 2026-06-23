@@ -1,8 +1,5 @@
-const CACHE = 'prompter-v6';
+const CACHE = 'prompter-v9';
 const ASSETS = [
-  './',
-  './index.html',
-  './remote.html',
   './manifest.json',
   './icons/icon-192.png',
   './icons/icon-512.png'
@@ -23,14 +20,26 @@ self.addEventListener('activate', e => {
 });
 
 self.addEventListener('fetch', e => {
-  // Network first for PeerJS CDN, cache first for local assets
-  if (e.request.url.includes('unpkg.com') || e.request.url.includes('fonts.googleapis.com')) {
-    e.respondWith(
-      fetch(e.request).catch(() => caches.match(e.request))
-    );
-  } else {
-    e.respondWith(
-      caches.match(e.request).then(r => r || fetch(e.request))
-    );
+  const url = e.request.url;
+
+  // CDN resources: network first, fall back to cache
+  if (url.includes('unpkg.com') || url.includes('fonts.googleapis.com') || url.includes('cdnjs.cloudflare.com')) {
+    e.respondWith(fetch(e.request).catch(() => caches.match(e.request)));
+    return;
   }
+
+  // HTML pages: always network first so code updates load immediately
+  if (url.endsWith('.html') || url.endsWith('/') || url === self.location.origin + '/') {
+    e.respondWith(
+      fetch(e.request).then(r => {
+        const copy = r.clone();
+        caches.open(CACHE).then(c => c.put(e.request, copy));
+        return r;
+      }).catch(() => caches.match(e.request))
+    );
+    return;
+  }
+
+  // Everything else: cache first
+  e.respondWith(caches.match(e.request).then(r => r || fetch(e.request)));
 });

@@ -102,7 +102,10 @@
     }
     /* ── Format toolbar ── */
     .format-toolbar {
-      display: none;
+      display: flex; flex-wrap: wrap; align-items: center;
+      gap: 4px; padding: 8px 12px;
+      background: #0c0c0c; border-bottom: 0.5px solid #1a1a1a;
+      flex-shrink: 0;
     }
     .fmt-group { display: flex; align-items: center; gap: 3px; }
     .fmt-divider { width: 0.5px; height: 20px; background: #222; margin: 0 4px; flex-shrink: 0; }
@@ -519,24 +522,20 @@ let activeColorMode = null;
 
 const $ = id => document.getElementById(id);
 
-// ── Convert contenteditable HTML → plain text with line breaks ──
-function editorToPlainHTML(html) {
-  const tmp = document.createElement('div');
-  tmp.innerHTML = html;
-  // Insert newline before each block element so text runs together correctly
-  tmp.querySelectorAll('p, div').forEach(el => {
-    el.prepend(document.createTextNode('\n'));
+// ── Strip font-size/family from a DOM tree so global A+/A− always applies ──
+function stripFontOverrides(root) {
+  root.querySelectorAll('[style]').forEach(el => {
+    el.style.removeProperty('font-size');
+    el.style.removeProperty('font-family');
   });
-  tmp.querySelectorAll('br').forEach(el => el.replaceWith('\n'));
-  return tmp.textContent
-    .replace(/^\n/, '')           // trim leading newline
-    .replace(/\n{3,}/g, '\n\n')  // collapse 3+ blank lines to 2
-    .replace(/\n/g, '<br>');      // back to HTML line breaks
 }
 
 // ── Text sync ──
 function syncText() {
-  $('prompterText').innerHTML = editorToPlainHTML($('scriptInput').innerHTML);
+  const tmp = document.createElement('div');
+  tmp.innerHTML = $('scriptInput').innerHTML;
+  stripFontOverrides(tmp);
+  $('prompterText').innerHTML = tmp.innerHTML;
   applyTypography();
   applyMirror();
   const w = $('scriptInput').textContent.trim().split(/\s+/).filter(Boolean).length;
@@ -545,10 +544,18 @@ function syncText() {
 
 $('scriptInput').addEventListener('input', syncText);
 
-// ── Paste: plain text only so no external styles bleed in ──
+// ── Paste: strip font-size/family but keep bold, color, etc. ──
 $('scriptInput').addEventListener('paste', e => {
   e.preventDefault();
-  document.execCommand('insertText', false, e.clipboardData.getData('text/plain'));
+  const html = e.clipboardData.getData('text/html');
+  if (html) {
+    const tmp = document.createElement('div');
+    tmp.innerHTML = html;
+    stripFontOverrides(tmp);
+    document.execCommand('insertHTML', false, tmp.innerHTML);
+  } else {
+    document.execCommand('insertText', false, e.clipboardData.getData('text/plain'));
+  }
   syncText();
 });
 
@@ -858,17 +865,37 @@ prompterPanel.addEventListener('pointercancel', () => {
 function tapLeft()  { if (!wasDrag) stopPlay(); }
 function tapRight() { if (!wasDrag) startPlay(); }
 
-// ── Fullscreen ──
+// ── Mode / Fullscreen ──
+// toggleMode: script button always goes straight to fullscreen prompter
 function toggleMode() {
-  editMode = !editMode;
-  $('app').classList.toggle('edit-mode', editMode);
-  $('btnMode').classList.toggle('on', editMode);
-  $('btnMode').textContent = editMode ? '✎ Script' : '▶ Prompter';
-  if (!editMode) syncText();
+  if (editMode) {
+    enterFullscreen();
+  } else {
+    goToEditMode();
+  }
+}
+
+function goToEditMode() {
+  editMode = true;
+  fsMode = false;
+  $('app').classList.remove('fullscreen');
+  $('app').classList.add('edit-mode');
+  $('btnMode').classList.add('on');
+  $('btnMode').textContent = '✎ Script';
+  $('btnFullscreen').classList.remove('on');
+  if (document.exitFullscreen) document.exitFullscreen().catch(() => {});
+  else if (document.webkitExitFullscreen) document.webkitExitFullscreen();
 }
 
 function enterFullscreen() {
-  if (editMode) toggleMode();
+  // Switch to prompter mode if needed
+  if (editMode) {
+    editMode = false;
+    $('app').classList.remove('edit-mode');
+    $('btnMode').classList.remove('on');
+    $('btnMode').textContent = '▶ Prompter';
+    syncText();
+  }
   fsMode = true;
   $('app').classList.add('fullscreen');
   $('btnFullscreen').classList.add('on');
@@ -878,12 +905,16 @@ function enterFullscreen() {
 }
 
 function exitFullscreen() {
-  fsMode = false;
-  $('app').classList.remove('fullscreen');
-  $('btnFullscreen').classList.remove('on');
-  if (document.exitFullscreen) document.exitFullscreen();
-  else if (document.webkitExitFullscreen) document.webkitExitFullscreen();
+  goToEditMode();
 }
+
+// Sync state if the browser exits fullscreen on its own (ESC key, browser UI, etc.)
+document.addEventListener('fullscreenchange', () => {
+  if (!document.fullscreenElement && fsMode) goToEditMode();
+});
+document.addEventListener('webkitfullscreenchange', () => {
+  if (!document.webkitFullscreenElement && fsMode) goToEditMode();
+});
 
 document.addEventListener('keydown', e => {
   if (e.code === 'Space' && document.activeElement !== $('scriptInput')) { e.preventDefault(); togglePlay(); }
